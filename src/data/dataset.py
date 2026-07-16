@@ -66,6 +66,8 @@ def load_and_prepare_data(processed_data_dir: str = "data/processed", test_days:
         "cov_train": cov_train_scaled,
         "cov_val": cov_val_scaled,
         "cov_test": cov_test_scaled,
+        "scaler_target": scaler_target,
+        "scaler_covs": scaler_covs,
     }
 
 if __name__ == "__main__":

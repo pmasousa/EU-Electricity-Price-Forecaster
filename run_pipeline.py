@@ -4,16 +4,16 @@ import os
 
 def run_script(script_path):
     print(f"\n{'='*50}")
-    print(f"🚀 Running {script_path}...")
+    print(f"Running {script_path}...")
     print(f"{'='*50}")
     
     # We use sys.executable to ensure it runs with the same python interpreter (e.g., the uv env)
     result = subprocess.run([sys.executable, script_path])
     
     if result.returncode != 0:
-        print(f"❌ Error: {script_path} failed with exit code {result.returncode}")
+        print(f"Error: {script_path} failed with exit code {result.returncode}")
         sys.exit(result.returncode)
-    print(f"✅ Successfully finished {script_path}\n")
+    print(f"Successfully finished {script_path}\n")
 
 if __name__ == "__main__":
     # Ensure we are in the project root
@@ -35,4 +35,4 @@ if __name__ == "__main__":
     for script in scripts:
         run_script(script)
     
-    print("🎉 Entire pipeline completed successfully! You can find reports and plots in the 'reports' directory.")
+    print("Entire pipeline completed successfully! You can find reports and plots in the 'reports' directory.")
