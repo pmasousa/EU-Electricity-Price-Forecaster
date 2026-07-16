@@ -37,3 +37,13 @@ mlflow.db
 
 # Ruff
 .ruff_cache/
+
+# Models and Metrics
+models/
+*.pt
+*.pkl
+reports/
+
+# Cache databases
+*.sqlite
+.cache.sqlite

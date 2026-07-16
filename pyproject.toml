@@ -27,7 +27,8 @@ dependencies = [
 dev-dependencies = [
     "pytest>=8.0.0",
     "ruff>=0.3.0",
-    "jupyter>=1.0.0"
+    "jupyter>=1.0.0",
+    "pyright>=1.1.411",
 ]
 
 [tool.ruff]

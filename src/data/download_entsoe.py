@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from entsoe import EntsoePandasClient
+from entsoe.entsoe import EntsoePandasClient
 
 # Load environment variables
 load_dotenv()
@@ -21,23 +21,23 @@ def download_entsoe_data(start_date: str, end_date: str, output_dir: str = "data
         
     client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
     
-    start = pd.Timestamp(start_date, tz='Europe/Zurich')
-    end = pd.Timestamp(end_date, tz='Europe/Zurich')
-    country_code = 'CH'  # Switzerland
-
-    print(f"Downloading ENTSO-E data for {country_code} from {start} to {end}...")
+    start = pd.Timestamp(start_date, tz='Europe/Zurich') # type: ignore
+    end = pd.Timestamp(end_date, tz='Europe/Zurich') # type: ignore
+    assert isinstance(start, pd.Timestamp)
+    assert isinstance(end, pd.Timestamp)
 
     os.makedirs(output_dir, exist_ok=True)
-
+    
     try:
-        # Day-ahead prices
-        print("Fetching Day-Ahead Prices...")
-        da_prices = client.query_day_ahead_prices(country_code, start=start, end=end)
-        da_prices.to_csv(f"{output_dir}/entsoe_prices.csv")
+        # Day-ahead Prices
+        print(f"Downloading ENTSO-E Day-ahead prices from {start_date} to {end_date}...")
+        prices = client.query_day_ahead_prices("CH", start=start, end=end)
+        prices_df = prices.to_frame(name="price")
+        prices_df.to_csv(os.path.join(output_dir, "entsoe_prices.csv"))
         
-        # Load
-        print("Fetching Load...")
-        load = client.query_load(country_code, start=start, end=end)
+        # Load (Actual)
+        print(f"Downloading ENTSO-E Load data...")
+        load = client.query_load("CH", start=start, end=end)
         load.to_csv(f"{output_dir}/entsoe_load.csv")
         
         print("Successfully downloaded ENTSO-E data.")
@@ -75,4 +75,4 @@ if __name__ == "__main__":
     # Download last 30 days as an example
     end = pd.Timestamp.now(tz='Europe/Zurich')
     start = end - pd.Timedelta(days=30)
-    download_entsoe_data(start.strftime('%Y%m%d'), end.strftime('%Y%m%d'))
+    download_entsoe_data(start.strftime('%Y%m%d'), end.strftime('%Y%m%d')) # type: ignore

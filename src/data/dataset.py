@@ -18,8 +18,8 @@ def load_and_prepare_data(processed_data_dir: str = "data/processed", test_days:
         
     df = pd.read_csv(features_path, parse_dates=[0], index_col=0)
     
-    # Convert index to timezone naive for Darts compatibility
-    df.index = df.index.tz_localize(None)
+    df.index = pd.to_datetime(df.index) # type: ignore
+    df.index = df.index.tz_localize(None) # type: ignore
     
     # Target
     series = TimeSeries.from_series(df['price'])

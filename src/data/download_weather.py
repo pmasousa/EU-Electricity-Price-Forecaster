@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import openmeteo_requests
 import requests_cache
 import pandas as pd
@@ -14,7 +15,7 @@ def download_weather_data(start_date: str, end_date: str, output_dir: str = "dat
     # Setup the Open-Meteo API client with cache and retry on error
     cache_session = requests_cache.CachedSession('.cache', expire_after = -1)
     retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-    openmeteo = openmeteo_requests.Client(session = retry_session)
+    openmeteo = openmeteo_requests.Client(session = retry_session) # type: ignore
 
     # Zurich coordinates as a proxy for Swiss weather
     url = "https://archive-api.open-meteo.com/v1/archive"
@@ -34,10 +35,11 @@ def download_weather_data(start_date: str, end_date: str, output_dir: str = "dat
         response = responses[0]
         
         hourly = response.Hourly()
-        hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
-        hourly_relative_humidity_2m = hourly.Variables(1).ValuesAsNumpy()
-        hourly_wind_speed_10m = hourly.Variables(2).ValuesAsNumpy()
-        hourly_direct_radiation = hourly.Variables(3).ValuesAsNumpy()
+        assert hourly is not None
+        hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy() # type: ignore
+        hourly_relative_humidity_2m = hourly.Variables(1).ValuesAsNumpy() # type: ignore
+        hourly_wind_speed_10m = hourly.Variables(2).ValuesAsNumpy() # type: ignore
+        hourly_direct_radiation = hourly.Variables(3).ValuesAsNumpy() # type: ignore
 
         hourly_data = {"date": pd.date_range(
             start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
@@ -46,10 +48,10 @@ def download_weather_data(start_date: str, end_date: str, output_dir: str = "dat
             inclusive = "left"
         )}
         
-        hourly_data["temperature_2m"] = hourly_temperature_2m
-        hourly_data["relative_humidity_2m"] = hourly_relative_humidity_2m
-        hourly_data["wind_speed_10m"] = hourly_wind_speed_10m
-        hourly_data["direct_radiation"] = hourly_direct_radiation
+        hourly_data["temperature_2m"] = hourly_temperature_2m # type: ignore
+        hourly_data["relative_humidity_2m"] = hourly_relative_humidity_2m # type: ignore
+        hourly_data["wind_speed_10m"] = hourly_wind_speed_10m # type: ignore
+        hourly_data["direct_radiation"] = hourly_direct_radiation # type: ignore
 
         hourly_dataframe = pd.DataFrame(data = hourly_data)
         
@@ -63,7 +65,6 @@ def download_weather_data(start_date: str, end_date: str, output_dir: str = "dat
         generate_mock_weather_data(start_date, end_date, output_dir)
 
 def generate_mock_weather_data(start_date, end_date, output_dir):
-    import numpy as np
     start = pd.to_datetime(start_date)
     end = pd.to_datetime(end_date)
     # Adding +1 day to end to match the inclusive range if needed, 

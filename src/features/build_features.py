@@ -43,11 +43,11 @@ def build_features(raw_data_dir: str = "data/raw", processed_data_dir: str = "da
     # Missing values (interpolate or forward fill)
     df = df.interpolate(method='linear', limit_direction='both')
     
-    # Calendar features
-    df['hour'] = df.index.hour
-    df['day_of_week'] = df.index.dayofweek
-    df['day_of_month'] = df.index.day
-    df['month'] = df.index.month
+    df_index = pd.to_datetime(df.index)
+    df['hour'] = df_index.hour # type: ignore
+    df['day_of_week'] = df_index.dayofweek # type: ignore
+    df['day_of_month'] = df_index.day # type: ignore
+    df['month'] = df_index.month # type: ignore
     df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
     
     # Cyclic encoding
