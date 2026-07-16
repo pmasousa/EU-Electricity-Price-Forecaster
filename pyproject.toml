@@ -1,0 +1,38 @@
+[project]
+name = "swiss-electricity-price-forecaster"
+version = "0.1.0"
+description = "A time-series forecasting model for the Swiss day-ahead electricity spot market."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "pandas",
+    "numpy",
+    "darts",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "entsoe-py",
+    "openmeteo-requests",
+    "requests-cache",
+    "retry-requests",
+    "matplotlib",
+    "scikit-learn",
+    "mlflow",
+    "gradio",
+    "numba>=0.58.0"
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "ruff>=0.3.0",
+    "jupyter>=1.0.0"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "N", "B"]

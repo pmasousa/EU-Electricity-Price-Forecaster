@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.git/
+.gitignore
+.env
+data/raw/
+data/interim/
+data/processed/
+notebooks/
+mlruns/
+mlflow.db
+.pytest_cache/
+.ruff_cache/
+Dockerfile
+.dockerignore
