@@ -32,7 +32,7 @@ def generate_comparison_plot():
     else:
         print("TFT Model not found. Training a quick one...")
         tft = TFTModel(
-            input_chunk_length=24*7,
+            input_chunk_length=24*3,
             output_chunk_length=24,
             hidden_size=16,
             lstm_layers=1,
@@ -47,7 +47,8 @@ def generate_comparison_plot():
         os.makedirs("models", exist_ok=True)
         tft.save(tft_path)
         
-    pred_val_tft = tft.predict(n=len(val), past_covariates=cov_val, series=train)
+    cov_combined = cov_train.append(cov_val)
+    pred_val_tft = tft.predict(n=len(val), past_covariates=cov_combined, series=train)
     pred_val_tft_real = scaler_target.inverse_transform(pred_val_tft)
     
     val_real = scaler_target.inverse_transform(val)

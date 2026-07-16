@@ -15,11 +15,13 @@ def backtest_models():
         print(f"Error loading data: {e}")
         return
         
+    train = data["train"]
     val = data["val"]
     scaler_target = data["scaler_target"]
     
     # Let's backtest the NaiveSeasonal model
     model = NaiveSeasonal(K=24)
+    model.fit(train)
     
     print("Running historical backtest (Walk-forward validation)...")
     
@@ -30,7 +32,7 @@ def backtest_models():
         start=0.5,
         forecast_horizon=24,
         stride=24, # Move forward by 24 hours at a time
-        retrain=False,
+        retrain=True,
         verbose=True
     )
     

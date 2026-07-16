@@ -8,7 +8,7 @@ dependencies = [
     "torch",
     "pandas",
     "numpy",
-    "darts",
+    "darts[torch]",
     "fastapi",
     "uvicorn[standard]",
     "python-dotenv",

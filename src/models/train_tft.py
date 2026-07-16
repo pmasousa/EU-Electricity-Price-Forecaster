@@ -23,7 +23,7 @@ def train_tft():
     scaler_target = data["scaler_target"]
     
     # TFT hyperparameters
-    input_chunk_length = 24 * 7  # Look back 7 days
+    input_chunk_length = 24 * 3  # Look back 3 days to fit the short validation set
     output_chunk_length = 24     # Predict next 24 hours
     
     tft = TFTModel(
@@ -50,7 +50,8 @@ def train_tft():
     
     # Evaluate
     print("Evaluating TFT model...")
-    pred_val_scaled = tft.predict(n=len(val), past_covariates=cov_val, series=train)
+    cov_combined = cov_train.append(cov_val)
+    pred_val_scaled = tft.predict(n=len(val), past_covariates=cov_combined, series=train)
     
     # Inverse transform
     pred_val = scaler_target.inverse_transform(pred_val_scaled)
