@@ -49,6 +49,11 @@ uv sync
 
 ### 2. Configuration
 
+To fetch real electricity data, you need a free API key from the ENTSO-E Transparency Platform:
+1. Register an account at [transparency.entsoe.eu](https://transparency.entsoe.eu/).
+2. Send an email to `transparency@entsoe.eu` with the subject "Restful API access" to request API access for your registered email address.
+3. Once approved, generate your token in the account settings (**My Account -> Web API Security Token -> Generate**).
+
 Copy the example environment file and fill in your API keys:
 
 ```bash
