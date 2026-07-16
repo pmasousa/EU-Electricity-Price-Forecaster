@@ -58,21 +58,19 @@ cp .env.example .env
 
 ### 3. Running the Pipeline
 
-You can run the entire pipeline sequentially:
+You can run the entire machine learning pipeline end-to-end with a single command:
 
 ```bash
-# Phase 1 & 2: Fetch data and build features
-uv run python src/features/build_features.py
-
-# Phase 3: Train Baseline Model
-uv run python src/models/baseline.py
-
-# Phase 4: Train TFT Model
-uv run python src/models/train_tft.py
-
-# Phase 5: Run Walk-forward Backtesting
-uv run python src/models/backtest.py
+uv run python run_pipeline.py
 ```
+
+This unified script will sequentially execute:
+1. Data Acquisition (ENTSO-E & Open-Meteo)
+2. Feature Engineering
+3. Baseline Evaluation
+4. Deep Sequence Modeling (TFT)
+5. Walk-forward Backtesting
+6. Comparison Plot Generation
 
 ### 4. Running the Demo Application
 
