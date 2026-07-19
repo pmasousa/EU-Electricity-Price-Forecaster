@@ -84,5 +84,5 @@ def generate_mock_weather_data(start_date, end_date, output_dir):
 
 if __name__ == "__main__":
     end = datetime.now() - timedelta(days=5) # Archive API has 5 day delay usually
-    start = end - timedelta(days=30)
+    start = end - timedelta(days=365)
     download_weather_data(start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d'))

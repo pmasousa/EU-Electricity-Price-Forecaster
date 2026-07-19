@@ -6,15 +6,19 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 
 from src.data.dataset import load_and_prepare_data
 from darts.models import NaiveSeasonal, TFTModel
+from darts.metrics import mae, rmse
 import pandas as pd
+import numpy as np
 
 def generate_comparison_plot():
     print("Loading data...")
     data = load_and_prepare_data()
     train = data["train"]
     val = data["val"]
-    cov_train = data["cov_train"]
-    cov_val = data["cov_val"]
+    past_train = data["past_train"]
+    past_val = data["past_val"]
+    future_train = data["future_train"]
+    future_val = data["future_val"]
     scaler_target = data["scaler_target"]
     
     # 1. Baseline
@@ -40,15 +44,16 @@ def generate_comparison_plot():
             dropout=0.1,
             batch_size=32,
             n_epochs=2,
-            add_relative_index=True,
+            add_relative_index=False,
             random_state=42
         )
-        tft.fit(series=train, past_covariates=cov_train, val_series=val, val_past_covariates=cov_val)
+        tft.fit(series=train, past_covariates=past_train, future_covariates=future_train, val_series=val, val_past_covariates=past_val, val_future_covariates=future_val)
         os.makedirs("models", exist_ok=True)
         tft.save(tft_path)
         
-    cov_combined = cov_train.append(cov_val)
-    pred_val_tft = tft.predict(n=len(val), past_covariates=cov_combined, series=train)
+    past_combined = past_train.append(past_val)
+    future_combined = future_train.append(future_val)
+    pred_val_tft = tft.predict(n=len(val), past_covariates=past_combined, future_covariates=future_combined, series=train)
     pred_val_tft_real = scaler_target.inverse_transform(pred_val_tft)
     
     val_real = scaler_target.inverse_transform(val)
@@ -74,7 +79,43 @@ def generate_comparison_plot():
     
     os.makedirs("reports", exist_ok=True)
     plt.savefig("reports/forecast_comparison.png", dpi=300, bbox_inches='tight')
+    plt.close()
     print("Plot saved to reports/forecast_comparison.png")
+    
+    # Generate Error Comparison Plot
+    print("Generating Error Comparison Plot...")
+    mae_baseline = mae(val_real, pred_val_baseline_real)
+    rmse_baseline = rmse(val_real, pred_val_baseline_real)
+    
+    mae_tft = mae(val_real, pred_val_tft_real)
+    rmse_tft = rmse(val_real, pred_val_tft_real)
+    
+    labels = ['MAE', 'RMSE']
+    baseline_scores = [mae_baseline, rmse_baseline]
+    tft_scores = [mae_tft, rmse_tft]
+    
+    x = np.arange(len(labels))
+    width = 0.35
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.bar(x - width/2, baseline_scores, width, label='Baseline (Naive Seasonal)', color='orange', alpha=0.8)
+    ax.bar(x + width/2, tft_scores, width, label='TFT Model', color='blue', alpha=0.8)
+    
+    ax.set_ylabel('Error (CHF/MWh)')
+    ax.set_title('Forecasting Error Comparison')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend()
+    ax.grid(True, axis='y', alpha=0.3)
+    
+    for i, v in enumerate(baseline_scores):
+        ax.text(i - width/2, v + 0.5, f"{v:.1f}", ha='center', fontweight='bold')
+    for i, v in enumerate(tft_scores):
+        ax.text(i + width/2, v + 0.5, f"{v:.1f}", ha='center', fontweight='bold')
+        
+    plt.savefig("reports/error_comparison.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    print("Error comparison plot saved to reports/error_comparison.png")
 
 if __name__ == "__main__":
     generate_comparison_plot()

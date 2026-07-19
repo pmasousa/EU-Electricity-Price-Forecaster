@@ -49,17 +49,13 @@ uv sync
 
 ### 2. Configuration
 
-To fetch real electricity data, you need a free API key from the ENTSO-E Transparency Platform:
-1. Register an account at [transparency.entsoe.eu](https://transparency.entsoe.eu/).
-2. Send an email to `transparency@entsoe.eu` with the subject "Restful API access" to request API access for your registered email address.
-3. Once approved, generate your token in the account settings (**My Account -> Web API Security Token -> Generate**).
+We use the free and open **Energy-Charts API** and **Open-Meteo API** to fetch real electricity and weather data automatically. **No API keys are required!**
 
-Copy the example environment file and fill in your API keys:
+However, it is recommended to set up your local environment file:
 
 ```bash
 cp .env.example .env
 ```
-*Note: The pipeline includes a fallback to generate mock data if the ENTSO-E API key is missing.*
 
 ### 3. Running the Pipeline
 
@@ -97,7 +93,7 @@ Open your browser to `http://localhost:7860` to interact with the forecast demo.
 
 - **Data Processing:** `pandas`, `numpy`
 - **Forecasting:** `darts`, `PyTorch`
-- **APIs:** `entsoe-py`, `openmeteo-requests`
+- **APIs:** `openmeteo-requests`, `requests`
 - **Deployment:** `FastAPI`, `Gradio`, `Docker`
 
 ## 🤝 Contributing
