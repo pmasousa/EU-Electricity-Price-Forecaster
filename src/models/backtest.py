@@ -1,5 +1,12 @@
 import os
 import sys
+import torch
+import warnings
+
+warnings.filterwarnings("ignore", message=".*isinstance.*treespec.*")
+warnings.filterwarnings("ignore", message=".*Tensor Cores.*")
+warnings.filterwarnings("ignore", module="pytorch_lightning.*")
+torch.set_float32_matmul_precision('high')
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 

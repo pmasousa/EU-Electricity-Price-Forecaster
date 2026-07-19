@@ -1,6 +1,16 @@
 import os
 import sys
+import torch
+import warnings
 import matplotlib.pyplot as plt
+
+# Suppress PyTorch Lightning pytree and Tensor Core warnings robustly
+warnings.filterwarnings("ignore", message=".*isinstance.*treespec.*")
+warnings.filterwarnings("ignore", message=".*Tensor Cores.*")
+warnings.filterwarnings("ignore", module="pytorch_lightning.*")
+
+# Enable Tensor Cores for massive speedup
+torch.set_float32_matmul_precision('high')
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -42,7 +52,7 @@ def generate_comparison_plot():
             lstm_layers=1,
             num_attention_heads=4,
             dropout=0.1,
-            batch_size=32,
+            batch_size=1024,
             n_epochs=2,
             add_relative_index=False,
             random_state=42,
