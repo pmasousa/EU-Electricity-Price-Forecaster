@@ -42,7 +42,11 @@ def train_tft():
         n_epochs=30,  # Increased for proper training!
         add_relative_index=False,
         random_state=42,
-        pl_trainer_kwargs={"logger": CSVLogger("reports/logs", name="tft_logs")}
+        pl_trainer_kwargs={
+            "logger": CSVLogger("reports/logs", name="tft_logs"),
+            "accelerator": "gpu",
+            "devices": 1
+        }
     )
     
     print("Training TFT model...")

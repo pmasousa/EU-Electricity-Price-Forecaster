@@ -45,7 +45,8 @@ def generate_comparison_plot():
             batch_size=32,
             n_epochs=2,
             add_relative_index=False,
-            random_state=42
+            random_state=42,
+            pl_trainer_kwargs={"accelerator": "gpu", "devices": 1}
         )
         tft.fit(series=train, past_covariates=past_train, future_covariates=future_train, val_series=val, val_past_covariates=past_val, val_future_covariates=future_val)
         os.makedirs("models", exist_ok=True)
