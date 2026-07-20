@@ -163,24 +163,30 @@ def predict_next_day(target_date: Optional[str] = None):
         past_scaled = scaler_past.transform(past_covs)
         future_scaled = scaler_future.transform(future_covs)
         
-        # Predict 24 hours into the future
+        # Predict 24 hours into the future using probabilistic sampling
         pred_scaled = model.predict(
             n=24,
             series=series_scaled,
             past_covariates=past_scaled,
-            future_covariates=future_scaled
+            future_covariates=future_scaled,
+            num_samples=100
         )
         
         # Inverse transform
         pred_real = scaler_target.inverse_transform(pred_scaled)
         
+        # Extract quantiles
+        quantiles_df = pred_real.quantiles_df((0.1, 0.5, 0.9))
+        
         # Format the response
         results = []
-        for ts, val in zip(pred_real.time_index, pred_real.values().flatten()):
+        for ts, row in quantiles_df.iterrows():
             ts_iso = ts.isoformat()
             res = {
                 "timestamp": ts_iso,
-                "predicted_price_chf_mwh": float(val)
+                "predicted_price_chf_mwh": float(row.iloc[1]),  # 0.5 quantile (median)
+                "q10": float(row.iloc[0]),                     # 0.1 quantile
+                "q90": float(row.iloc[2])                      # 0.9 quantile
             }
             if ts_iso in actual_prices:
                 res["actual_price_chf_mwh"] = actual_prices[ts_iso]

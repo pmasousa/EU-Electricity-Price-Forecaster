@@ -104,7 +104,7 @@ pip install --pre torch torchvision torchaudio --extra-index-url https://downloa
 
 ### 2. Configuration
 
-We use the free and open **Energy-Charts API** and **Open-Meteo API** to fetch real electricity and weather data automatically. **No API keys are required!**
+We use the free and open **Energy-Charts API** and **Open-Meteo API** to fetch real electricity and weather data automatically. **No API keys required**
 
 ### 3. Running the Pipeline
 
@@ -145,22 +145,18 @@ Open your browser to `http://localhost:7860` to interact with the forecast demo.
 - **APIs:** `openmeteo-requests`, `requests`
 - **Deployment:** `FastAPI`, `Gradio`, `Docker`
 
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/yourusername/swiss_electricity_price_forecaster/issues).
-
-## ?? Technical Challenges & Solutions (Interview Talking Points)
+## Technical Challenges & Solutions (Interview Talking Points)
 
 During the development of this project, several complex technical challenges were encountered and successfully resolved:
 
-- **Hardware Agnostic Inference (GPU to CPU Migration):** The Temporal Fusion Transformer was trained on an RTX 5070 using PyTorch Lightning with CUDAAccelerator. Loading and inferencing this model on a standard CPU environment for the API caused hardware mismatch errors. **Solution:** Dynamically intercepted and overrode the model's inner PyTorch Lightning 	rainer_params (setting ccelerator='cpu' and devices=1) immediately after loading the weights into memory, allowing seamless cross-platform deployment.
+- **Hardware Agnostic Inference (GPU to CPU Migration):** The Temporal Fusion Transformer was trained on an RTX 5070 using PyTorch Lightning with CUDAAccelerator. Loading and inferencing this model on a standard CPU environment for the API caused hardware mismatch errors. **Solution:** Dynamically intercepted and overrode the model's inner PyTorch Lightning 	rainer_params (setting accelerator='cpu' and devices=1) immediately after loading the weights into memory, allowing seamless cross-platform deployment.
 - **PyTorch 2.6 Security & Serialization Blocks:** PyTorch 2.6 restricts arbitrary object unpickling via weights_only=True by default, which blocked the deserialization of the Darts QuantileRegression likelihood class. **Solution:** Implemented the 	orch.serialization.add_safe_globals whitelist to explicitly allow the Darts custom distributions, ensuring secure and successful model hydration.
 - **Multi-Process Pickling Errors:** The model loading process used Python's multiprocessing which struggled to locate custom callback definitions (e.g., GlobalTimerCallback) since they were defined locally in the __main__ scope during training. **Solution:** Standardized the import structure and decoupled the custom classes so that they were globally discoverable when spawning new inference processes.
 - **Dynamic Historical Backtesting:** A core feature was allowing users to query historical dates to compare the model's predictions with actual real-world prices. **Solution:** Engineered the API endpoint to dynamically slice the Pandas time-series dataframe 72 hours *prior* to any requested timestamp, fetch the true actuals, and construct a melted payload that the Gradio UI could seamlessly ingest to overlay predicted vs. actual trends.
 
-### ?? Deep Learning & AI Architecture Challenges
+### Deep Learning & AI Architecture Challenges
 
-- **Covariate Separation & Data Leakage Prevention:** The Temporal Fusion Transformer (TFT) requires strict mathematical separation of variables into past_covariates (historical load/prices) and uture_covariates (weather forecasts, calendar events). Aligning these exact sequences without accidentally bleeding future information into the past (look-ahead bias) was a major data engineering hurdle. **Solution:** Engineered a robust, chronologically-strict data pipeline that fits Scalers exclusively on the training split, and carefully aligns 72-hour lookback windows (input_chunk) with 24-hour forecast horizons (output_chunk).
+- **Covariate Separation & Data Leakage Prevention:** The Temporal Fusion Transformer (TFT) requires strict mathematical separation of variables into past_covariates (historical load/prices) and future_covariates (weather forecasts, calendar events). Aligning these exact sequences without accidentally bleeding future information into the past (look-ahead bias) was a major data engineering hurdle. **Solution:** Engineered a robust, chronologically-strict data pipeline that fits Scalers exclusively on the training split, and carefully aligns 72-hour lookback windows (input_chunk) with 24-hour forecast horizons (output_chunk).
 - **Cyclic Temporal Discontinuities:** Electricity prices exhibit massive daily and weekly seasonality. Feeding raw ordinal numbers (e.g., hour 23 vs hour 0) to a neural network creates artificial mathematical discontinuities, degrading the attention mechanism's performance. **Solution:** Applied trigonometric cyclic feature encoding (Sine/Cosine transformations) to all time variables (hour, day of week, month), allowing the network to perceive time continuously.
 - **Compounding Errors in Auto-Regressive LSTMs:** Traditional recurrent models (RNN/LSTM) predict one step at a time, feeding predictions back into themselves to predict 24 hours out. This causes errors to compound exponentially. **Solution:** Leveraged TFT's advanced seq-to-seq architecture to perform "Single-Shot Multi-Horizon Forecasting", directly predicting the entire 24-hour day-ahead curve at once, completely bypassing compounding recursive errors.
 - **Extreme Market Volatility & Outliers:** Energy markets frequently experience massive price spikes or negative prices. Traditional models optimizing for Mean Squared Error (MSE) get heavily skewed by these outliers. **Solution:** Configured the TFT to use QuantileRegression as its likelihood model. Instead of predicting a single deterministic point, the model learns to output a probabilistic distribution (e.g., 10th, 50th, 90th percentiles), allowing it to quantify uncertainty and remain robust against market shocks.
