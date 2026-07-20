@@ -23,7 +23,7 @@ This project implements an end-to-end Machine Learning pipeline utilizing advanc
 
 ## 📈 Model Performance
 
-Evaluating time-series models on a single validation split can be overly optimistic or pessimistic depending on the specific week chosen. Therefore, we evaluate our models using both a standard single-split and a robust **Walk-Forward Backtesting** approach against a strong `NaiveSeasonal (K=24)` baseline (due to the high daily seasonality of electricity prices).
+Evaluating time-series models on a single validation split can be overly optimistic or pessimistic depending on the specific week chosen. Therefore, we evaluate our models using both a standard single-split and a robust **Walk-Forward Backtesting** approach against strong Linear Regression and LightGBM baselines.
 
 ### 1. Single-Split Validation (Week-Ahead Auto-Regression)
 This represents the error on a single static 7-day test set. Because this is a Day-Ahead model (trained to predict 24 hours), forecasting a full 7 days (168 hours) in one shot forces the model to use **auto-regression** (feeding its own predictions back into itself to predict further into the future). This naturally degrades accuracy compared to a true 24-hour prediction.
@@ -37,7 +37,6 @@ This represents the error on a single static 7-day test set. Because this is a D
 This is a much more robust and realistic metric. We give the model the history up to Day $T$, ask for Day $T+1$, and then slide the window forward by 24 hours. We repeat this for the entire 7-day validation set. This evaluates the model's true **Day-Ahead** performance without the penalty of 7-day auto-regression!
 | Model | MAE (CHF/MWh) | RMSE (CHF/MWh) |
 |-------|---------------|----------------|
-| Naive Seasonal Baseline | ~56.04 | ~59.71 |
 | Temporal Fusion Transformer | **~24.50** | **~33.19** |
 
 *(Note: Exact metrics vary based on the specific historical volatility and the duration of the dataset used).*
