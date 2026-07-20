@@ -106,12 +106,6 @@ pip install --pre torch torchvision torchaudio --extra-index-url https://downloa
 
 We use the free and open **Energy-Charts API** and **Open-Meteo API** to fetch real electricity and weather data automatically. **No API keys are required!**
 
-However, it is recommended to set up your local environment file:
-
-```bash
-cp .env.example .env
-```
-
 ### 3. Running the Pipeline
 
 You can run the entire machine learning pipeline end-to-end with a single command:
