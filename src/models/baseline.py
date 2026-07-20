@@ -61,6 +61,36 @@ def train_and_evaluate_baselines():
             f.write(f"{name}\n")
             f.write(f"MAE: {mae_score:.2f}\n")
             f.write(f"RMSE: {rmse_score:.2f}\n\n")
+            
+            # --- Walk-Forward Backtest ---
+            print(f"Running historical backtest (Walk-forward) for {name}...")
+            past_covs = past_train.append(past_val)
+            future_covs = future_train.append(future_val)
+            all_series = train.append(val)
+            
+            forecasts = model.historical_forecasts(
+                series=all_series,
+                past_covariates=past_covs,
+                future_covariates=future_covs,
+                start=len(train),
+                forecast_horizon=24,
+                stride=24,
+                retrain=False,
+                verbose=False
+            )
+            forecasts_real = scaler_target.inverse_transform(forecasts)
+            
+            backtest_mae = mae(actual_val, forecasts_real)
+            backtest_rmse = rmse(actual_val, forecasts_real)
+            
+            print(f"Backtest MAE:  {backtest_mae:.2f} CHF/MWh")
+            print(f"Backtest RMSE: {backtest_rmse:.2f} CHF/MWh\n")
+            
+            # Write to backtest_metrics.txt as well
+            with open("reports/backtest_metrics.txt", "a") as bf:
+                bf.write(f"Backtest: {name}\n")
+                bf.write(f"MAE: {backtest_mae:.2f}\n")
+                bf.write(f"RMSE: {backtest_rmse:.2f}\n\n")
 
 if __name__ == "__main__":
     train_and_evaluate_baselines()
