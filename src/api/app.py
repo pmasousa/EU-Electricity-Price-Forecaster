@@ -2,8 +2,9 @@ import gradio as gr
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
 
-API_URL = "http://127.0.0.1:8000/predict"
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/predict")
 
 def fetch_predictions(target_date="", show_ci=False):
     try:
@@ -108,4 +109,4 @@ with gr.Blocks(title="Electricity Price Forecaster", theme=gr.themes.Soft()) as 
     compare_btn.click(fn=fetch_predictions, inputs=[target_date_input, show_ci_cb], outputs=[plot_output, table_output])
 
 if __name__ == "__main__":
-    demo.launch(server_name="127.0.0.1", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860)
