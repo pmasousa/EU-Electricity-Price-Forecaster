@@ -76,15 +76,20 @@ def fetch_predictions(target_date="", show_ci=False):
 try:
     # Quick read of the last date from the dataset to show training bounds
     df_meta = pd.read_csv("data/processed/features.csv", usecols=[0])
-    last_train_date = pd.to_datetime(df_meta.iloc[-1, 0]).strftime('%Y-%m-%d')
+    last_data_date = pd.to_datetime(df_meta.iloc[-1, 0])
+    
+    # 14 days were held out for validation (7) and testing (7)
+    last_train_date = (last_data_date - pd.Timedelta(days=14)).strftime('%Y-%m-%d')
+    last_context_date = last_data_date.strftime('%Y-%m-%d')
 except Exception:
     last_train_date = "Unknown"
+    last_context_date = "Unknown"
 
 # Create Gradio interface
 with gr.Blocks(title="Electricity Price Forecaster", theme=gr.themes.Soft()) as demo:
     gr.Markdown("# ⚡ Swiss Day-Ahead Electricity Price Forecaster")
     gr.Markdown("Click the button below to fetch the 24-hour forecast from the Deep Temporal Fusion Transformer model.")
-    gr.Markdown(f"*(Note: The model was trained on historical data up to **{last_train_date}**)*")
+    gr.Markdown(f"*(Note: Model weights trained on data up to **{last_train_date}**. Latest context data available up to **{last_context_date}**)*")
     
     with gr.Row():
         predict_btn = gr.Button("Get Tomorrow's Forecast", variant="primary")
