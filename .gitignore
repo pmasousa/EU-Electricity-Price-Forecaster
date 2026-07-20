@@ -39,7 +39,7 @@ mlflow.db
 .ruff_cache/
 
 # Models and Metrics
-models/
+/models/
 *.pt
 *.pkl
 reports/
