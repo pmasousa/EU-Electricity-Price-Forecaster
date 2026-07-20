@@ -41,40 +41,6 @@ This is a much more robust and realistic metric. We give the model the history u
 
 *(Note: Exact metrics vary based on the specific historical volatility and the duration of the dataset used).*
 
-### 3. Model Architecture Update (Before vs After)
-
-We recently experimented with upgrading the model capacity. We scaled the `hidden_size` from 16 to 64, increased `lstm_layers` from 1 to 2, and increased `dropout` from 0.1 to 0.3, while adding `EarlyStopping` to prevent overfitting over 100 epochs.
-
-**Evaluation Results:**
-| Model Setup | Single-Shot MAE | Single-Shot RMSE | Rolling MAE | Rolling RMSE |
-|-------------|-----------------|------------------|-------------|--------------|
-| Original (Small) | ~34.75 | ~45.33 | ~29.53 | ~40.33 |
-| Upgraded (Deep) | ~36.88 | ~47.71 | **~24.50** | **~33.19** |
-
-*Analysis:* The upgraded Deep model with Early Stopping successfully prevented the severe overfitting seen in earlier unregularized iterations. While the 7-day single-shot performance is comparable to the original small model (MAE 36.88 vs 34.75), the **Rolling Day-Ahead backtest shows a massive improvement** (MAE 24.50 vs 29.53). Since the Rolling Day-Ahead is the true objective for a spot-market forecasting system, the increased model capacity—when properly regularized—proves to be highly beneficial for capturing complex daily patterns!
-
-#### Rolling Forecast Performance (Before vs After)
-<details>
-<summary>View the Before vs After Rolling Forecast comparison</summary>
-
-**Before (Small Model)**
-<img src="docs/rolling_forecast_comparison_before.png" alt="Rolling Forecast Before" width="800"/>
-
-**After (Deep Model)**
-<img src="docs/rolling_forecast_comparison_after.png" alt="Rolling Forecast After" width="800"/>
-</details>
-
-#### Error Distribution (Before vs After)
-<details>
-<summary>View the Before vs After Error Distribution comparison</summary>
-
-**Before (Small Model)**
-<img src="docs/error_comparison_before.png" alt="Error Comparison Before" width="800"/>
-
-**After (Deep Model)**
-<img src="docs/error_comparison_after.png" alt="Error Comparison After" width="800"/>
-</details>
-
 ## 🚀 Getting Started
 
 ### 1. Environment Setup
