@@ -79,15 +79,27 @@ We recently experimented with upgrading the model capacity. We scaled the `hidde
 
 ### 1. Environment Setup
 
-Ensure you have Python >= 3.11 installed. This project uses `uv` for lightning-fast dependency management.
+Ensure you have Python >= 3.11 installed.
+
+> [!WARNING]
+> While you can use tools like `uv` for fast dependency management, it currently struggles to resolve **PyTorch Nightly** builds. If you are using an RTX 50-series GPU (e.g., RTX 5070) which requires PyTorch Nightly for CUDA 12.4 support, you must use standard `pip` as shown below.
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/swiss_electricity_price_forecaster.git
 cd swiss_electricity_price_forecaster
 
-# Install dependencies using uv
-uv sync
+# Create and activate a virtual environment
+python -m venv .venv
+# On Windows:
+.venv\Scripts\activate
+# On Linux/macOS: source .venv/bin/activate
+
+# Install regular dependencies
+pip install .
+
+# IF you have an RTX 50-series GPU, install PyTorch Nightly (CUDA 12.4):
+pip install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cu124 --force-reinstall
 ```
 
 ### 2. Configuration
@@ -105,7 +117,7 @@ cp .env.example .env
 You can run the entire machine learning pipeline end-to-end with a single command:
 
 ```bash
-uv run python run_pipeline.py
+python run_pipeline.py
 ```
 
 This unified script will sequentially execute:
@@ -122,13 +134,13 @@ Start the backend API and the frontend dashboard in separate terminal windows:
 
 **Terminal 1 (Backend API):**
 ```bash
-uv run python -m src.api.main
+python -m src.api.main
 ```
 The API will be available at `http://localhost:8000`.
 
 **Terminal 2 (Gradio UI):**
 ```bash
-uv run python -m src.api.app
+python -m src.api.app
 ```
 Open your browser to `http://localhost:7860` to interact with the forecast demo.
 
