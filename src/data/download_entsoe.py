@@ -76,5 +76,5 @@ def generate_mock_entsoe_data(start_date, end_date, output_dir):
 if __name__ == "__main__":
     # Download last 365 days of real data
     end = pd.Timestamp.now(tz='UTC')
-    start = end - pd.Timedelta(days=365)
+    start = end - pd.Timedelta(days=365 * 3)
     download_entsoe_data(start, end)

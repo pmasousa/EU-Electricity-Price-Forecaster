@@ -18,8 +18,34 @@ from darts.models import TFTModel
 from darts.metrics import mae, rmse
 from darts.dataprocessing.transformers import Scaler
 from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.callbacks import Callback
 import matplotlib.pyplot as plt
 import pandas as pd
+import time
+import datetime
+
+class GlobalTimerCallback(Callback):
+    def __init__(self):
+        self.start_time = None
+        
+    def on_train_start(self, trainer, pl_module):
+        self.start_time = time.time()
+        
+    def on_train_epoch_end(self, trainer, pl_module):
+        if self.start_time is None:
+            return
+        elapsed = time.time() - self.start_time
+        epochs_completed = trainer.current_epoch + 1
+        total_epochs = trainer.max_epochs
+        
+        avg_time_per_epoch = elapsed / epochs_completed
+        remaining_epochs = total_epochs - epochs_completed
+        eta_seconds = remaining_epochs * avg_time_per_epoch
+        
+        eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+        elapsed_string = str(datetime.timedelta(seconds=int(elapsed)))
+        
+        print(f"\n[Global Timer] Epoch {epochs_completed}/{total_epochs} | Elapsed: {elapsed_string} | ETA: {eta_string}")
 
 def train_tft():
     print("Loading data for TFT model...")
@@ -49,13 +75,14 @@ def train_tft():
         num_attention_heads=4,
         dropout=0.1,
         batch_size=1024,
-        n_epochs=30,  # Increased for proper training!
+        n_epochs=30,
         add_relative_index=False,
         random_state=42,
         pl_trainer_kwargs={
             "logger": CSVLogger("reports/logs", name="tft_logs"),
-            "accelerator": "gpu",
-            "devices": 1
+            "accelerator": "cuda" if torch.cuda.is_available() else "cpu",
+            "devices": [0] if torch.cuda.is_available() else "auto",
+            "callbacks": [GlobalTimerCallback()]
         }
     )
     
@@ -70,32 +97,11 @@ def train_tft():
         verbose=True
     )
     
-    # Plot learning curve
-    print("Plotting learning curve...")
-    try:
-        metrics_df = pd.read_csv(f"{tft.trainer.logger.experiment.metrics_file_path}")
-        plt.figure(figsize=(10, 5))
-        if 'train_loss' in metrics_df.columns:
-            train_loss = metrics_df[['epoch', 'train_loss']].dropna().groupby('epoch').mean()
-            plt.plot(train_loss.index, train_loss['train_loss'], label="Train Loss")
-        if 'val_loss' in metrics_df.columns:
-            val_loss = metrics_df[['epoch', 'val_loss']].dropna().groupby('epoch').mean()
-            plt.plot(val_loss.index, val_loss['val_loss'], label="Validation Loss")
-        plt.title("TFT Learning Curve")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.savefig("reports/learning_curve.png", dpi=300, bbox_inches='tight')
-        plt.close()
-    except Exception as e:
-        print(f"Could not plot learning curve: {e}")
-        
     # Evaluate
     print("Evaluating TFT model...")
     past_combined = past_train.append(past_val)
     future_combined = future_train.append(future_val)
-    pred_val_scaled = tft.predict(n=len(val), past_covariates=past_combined, future_covariates=future_combined, series=train)
+    pred_val_scaled = tft.predict(n=len(val), past_covariates=past_combined, future_covariates=future_combined, series=train, show_warnings=False)
     
     # Inverse transform
     pred_val = scaler_target.inverse_transform(pred_val_scaled)
@@ -116,10 +122,10 @@ def train_tft():
     
     # Save metrics
     os.makedirs("reports", exist_ok=True)
-    with open("reports/tft_metrics.txt", "w") as f:
-        f.write(f"TFT Model (epochs={tft.n_epochs})\n")
+    with open("reports/metrics.txt", "a") as f:
+        f.write(f"TFT Model (Single-Shot Week-Ahead)\n")
         f.write(f"MAE: {mae_score:.2f}\n")
-        f.write(f"RMSE: {rmse_score:.2f}\n")
+        f.write(f"RMSE: {rmse_score:.2f}\n\n")
 
 if __name__ == "__main__":
     train_tft()
