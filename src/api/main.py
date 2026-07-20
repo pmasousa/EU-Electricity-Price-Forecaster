@@ -176,17 +176,19 @@ def predict_next_day(target_date: Optional[str] = None):
         pred_real = scaler_target.inverse_transform(pred_scaled)
         
         # Extract quantiles
-        quantiles_df = pred_real.quantiles_df((0.1, 0.5, 0.9))
+        q10_vals = pred_real.quantile(0.1).values().flatten()
+        q50_vals = pred_real.quantile(0.5).values().flatten()
+        q90_vals = pred_real.quantile(0.9).values().flatten()
         
         # Format the response
         results = []
-        for ts, row in quantiles_df.iterrows():
+        for i, ts in enumerate(pred_real.time_index):
             ts_iso = ts.isoformat()
             res = {
                 "timestamp": ts_iso,
-                "predicted_price_chf_mwh": float(row.iloc[1]),  # 0.5 quantile (median)
-                "q10": float(row.iloc[0]),                     # 0.1 quantile
-                "q90": float(row.iloc[2])                      # 0.9 quantile
+                "predicted_price_chf_mwh": float(q50_vals[i]),
+                "q10": float(q10_vals[i]),
+                "q90": float(q90_vals[i])
             }
             if ts_iso in actual_prices:
                 res["actual_price_chf_mwh"] = actual_prices[ts_iso]
