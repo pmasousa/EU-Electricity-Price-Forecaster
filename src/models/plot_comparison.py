@@ -131,12 +131,13 @@ def generate_comparison_plot():
     
     # Plot only the last 3 days of train for context + validation
     history_len = 24 * 3
+    train_plot = scaler_target.inverse_transform(train[-history_len:])
     
     val_start = val_real.time_index[0]
     val_end = val_real.time_index[-1]
     
     # Subplot 1: LR vs TFT
-    ax1.plot(train_real.time_index, train_real.values(), label="Actual (Train)", color="black", linewidth=1.5)
+    ax1.plot(train_plot.time_index, train_plot.values(), label="Actual (Train)", color="black", linewidth=1.5)
     ax1.plot(val_real.time_index, val_real.values(), label="Actual (Validation)", color="black", linestyle="-", linewidth=1.5, alpha=0.5)
     ax1.axvspan(val_start, val_end, color='gray', alpha=0.1, label="Validation Period")
     ax1.plot(pred_val_lr_real.time_index, pred_val_lr_real.values(), label="Linear Regression", color="orange", linestyle="--", linewidth=1.5)
@@ -147,7 +148,7 @@ def generate_comparison_plot():
     ax1.grid(True, alpha=0.3)
     
     # Subplot 2: LightGBM vs TFT
-    ax2.plot(train_real.time_index, train_real.values(), label="Actual (Train)", color="black", linewidth=1.5)
+    ax2.plot(train_plot.time_index, train_plot.values(), label="Actual (Train)", color="black", linewidth=1.5)
     ax2.plot(val_real.time_index, val_real.values(), label="Actual (Validation)", color="black", linestyle="-", linewidth=1.5, alpha=0.5)
     ax2.axvspan(val_start, val_end, color='gray', alpha=0.1, label="Validation Period")
     ax2.plot(pred_val_lgbm_real.time_index, pred_val_lgbm_real.values(), label="LightGBM", color="purple", linestyle="--", linewidth=1.5)
@@ -229,7 +230,7 @@ def generate_comparison_plot():
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
     
     # Subplot 1: LR vs TFT (Rolling)
-    ax1.plot(train_real.time_index, train_real.values(), label="Actual (Train)", color="black", linewidth=1.5)
+    ax1.plot(train_plot.time_index, train_plot.values(), label="Actual (Train)", color="black", linewidth=1.5)
     ax1.plot(val_real.time_index, val_real.values(), label="Actual (Validation)", color="black", linestyle="-", linewidth=1.5, alpha=0.5)
     ax1.axvspan(val_start, val_end, color='gray', alpha=0.1, label="Validation Period")
     ax1.plot(pred_val_lr_real.time_index, pred_val_lr_real.values(), label=f"Linear Regression (Week-Ahead MAE: {mae_lr:.2f})", color="orange", linestyle="--", linewidth=1.5)
@@ -245,7 +246,7 @@ def generate_comparison_plot():
     ax1.grid(True, alpha=0.3)
     
     # Subplot 2: GBM vs TFT (Rolling)
-    ax2.plot(train_real.time_index, train_real.values(), label="Actual (Train)", color="black", linewidth=1.5)
+    ax2.plot(train_plot.time_index, train_plot.values(), label="Actual (Train)", color="black", linewidth=1.5)
     ax2.plot(val_real.time_index, val_real.values(), label="Actual (Validation)", color="black", linestyle="-", linewidth=1.5, alpha=0.5)
     ax2.axvspan(val_start, val_end, color='gray', alpha=0.1, label="Validation Period")
     ax2.plot(pred_val_lgbm_real.time_index, pred_val_lgbm_real.values(), label=f"LightGBM (Week-Ahead MAE: {mae_lgbm:.2f})", color="purple", linestyle="--", linewidth=1.5)
