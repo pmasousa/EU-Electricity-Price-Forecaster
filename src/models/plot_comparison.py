@@ -83,6 +83,7 @@ def generate_comparison_plot():
     if os.path.exists(tft_path):
         tft = TFTModel.load(tft_path, map_location="cpu", weights_only=False)
         tft.trainer_params["accelerator"] = "cpu"
+        tft.trainer_params["devices"] = "auto"
     else:
         print("TFT Model not found. Training a quick one...")
         tft = TFTModel(
