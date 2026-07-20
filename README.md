@@ -90,6 +90,11 @@ This unified script will sequentially execute:
 
 ### 4. Running the Demo Application
 
+You have two options for running the demo: locally via Python or containerized via Docker.
+
+**Important:** Because model weights (`models/`) and datasets (`data/`) are not committed to Git, you **must** complete Step 3 (`python run_pipeline.py`) to generate them before attempting to start the API or UI.
+
+#### Option A: Local Python Environment
 Start the backend API and the frontend dashboard in separate terminal windows:
 
 **Terminal 1 (Backend API):**
@@ -102,7 +107,14 @@ The API will be available at `http://localhost:8000`.
 ```bash
 python -m src.api.app
 ```
-Open your browser to `http://localhost:7860` to interact with the forecast demo.
+Open your browser to `http://localhost:7860`.
+
+#### Option B: Docker Compose
+If you prefer to run the API and UI in isolated containers, simply run:
+```bash
+docker-compose up --build
+```
+This will spin up both the backend and frontend simultaneously. Open your browser to `http://localhost:7860`.
 
 ## 🛠️ Tech Stack
 
