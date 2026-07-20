@@ -2,7 +2,16 @@
   <h1>⚡ Swiss Day-Ahead Electricity Price Forecaster</h1>
   <p><i>A probabilistic time-series forecasting model designed for the highly volatile European/Swiss energy spot market.</i></p>
   
-  <img src="reports/rolling_forecast_comparison.png" alt="Rolling Day-Ahead Forecast Plot" width="1000"/>
+  #### Error Distribution
+<details>
+<summary>View Error Distribution Comparison</summary>
+
+**Single-Shot (Week-Ahead) Error**
+<img src="reports/error_comparison_week_ahead.png" alt="Week-Ahead Error Comparison" width="800"/>
+
+**Rolling (Day-Ahead) Error**
+<img src="reports/error_comparison_day_ahead.png" alt="Day-Ahead Error Comparison" width="800"/>
+</details>
 </div>
 
 ---

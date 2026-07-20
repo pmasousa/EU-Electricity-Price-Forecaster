@@ -44,6 +44,8 @@ def generate_comparison_plot():
     future_train = data["future_train"]
     future_val = data["future_val"]
     scaler_target = data["scaler_target"]
+    val_real = scaler_target.inverse_transform(val)
+    train_real = scaler_target.inverse_transform(train)
     
     # 1. Baselines
     print("Running Baselines...")
@@ -59,11 +61,27 @@ def generate_comparison_plot():
     pred_val_lgbm = baseline_lgbm.predict(n=len(val), past_covariates=past_train.append(past_val), future_covariates=future_train.append(future_val))
     pred_val_lgbm_real = scaler_target.inverse_transform(pred_val_lgbm)
     
+    # Run rolling backtest for baselines
+    print("Running Baseline Walk-Forward Backtests for plot...")
+    all_series = train.append(val)
+    past_covs = past_train.append(past_val)
+    future_covs = future_train.append(future_val)
+    
+    lr_rolling = baseline_lr.historical_forecasts(series=all_series, past_covariates=past_covs, future_covariates=future_covs, start=len(train), forecast_horizon=24, stride=24, retrain=False, verbose=False)
+    lr_rolling_real = scaler_target.inverse_transform(lr_rolling)
+    mae_lr_rolling = mae(val_real, lr_rolling_real)
+    rmse_lr_rolling = rmse(val_real, lr_rolling_real)
+    
+    lgbm_rolling = baseline_lgbm.historical_forecasts(series=all_series, past_covariates=past_covs, future_covariates=future_covs, start=len(train), forecast_horizon=24, stride=24, retrain=False, verbose=False)
+    lgbm_rolling_real = scaler_target.inverse_transform(lgbm_rolling)
+    mae_lgbm_rolling = mae(val_real, lgbm_rolling_real)
+    rmse_lgbm_rolling = rmse(val_real, lgbm_rolling_real)
+    
     # 2. TFT Model
     print("Running TFT...")
     tft_path = "models/tft_model.pt"
     if os.path.exists(tft_path):
-        tft = TFTModel.load(tft_path)
+        tft = TFTModel.load(tft_path, map_location="cpu")
     else:
         print("TFT Model not found. Training a quick one...")
         tft = TFTModel(
@@ -94,7 +112,6 @@ def generate_comparison_plot():
     pred_val_tft = tft.predict(n=len(val), past_covariates=past_combined, future_covariates=future_combined, series=train, show_warnings=False)
     pred_val_tft_real = scaler_target.inverse_transform(pred_val_tft)
     
-    val_real = scaler_target.inverse_transform(val)
     
     # Calculate Single-Shot Metrics
     mae_lr = mae(val_real, pred_val_lr_real)
@@ -112,7 +129,6 @@ def generate_comparison_plot():
     
     # Plot only the last 3 days of train for context + validation
     history_len = 24 * 3
-    train_real = scaler_target.inverse_transform(train[-history_len:])
     
     val_start = val_real.time_index[0]
     val_end = val_real.time_index[-1]
@@ -247,31 +263,10 @@ def generate_comparison_plot():
     plt.close()
     print("Rolling forecast plot saved to reports/rolling_forecast_comparison.png")
     
-    # Generate Error Comparison Plot
-    print("Generating Error Comparison Plot...")
+    # Generate Error Comparison Plots
+    print("Generating Error Comparison Plots...")
     
-    plt.figure(figsize=(10, 6))
-    
-    # We will plot single-shot (Week-Ahead) errors for all 3, and rolling Day-Ahead for TFT
-    models = ['Linear Reg.', 'LightGBM', 'TFT (Week-Ahead)', 'TFT (Day-Ahead Rolling)']
-    mae_scores = [mae_lr, mae_lgbm, mae_tft, mae_tft_rolling]
-    rmse_scores = [rmse_lr, rmse_lgbm, rmse_tft, rmse_tft_rolling]
-    
-    x = np.arange(len(models))
-    width = 0.35
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    rects1 = ax.bar(x - width/2, mae_scores, width, label='MAE', color='skyblue')
-    rects2 = ax.bar(x + width/2, rmse_scores, width, label='RMSE', color='salmon')
-    
-    ax.set_ylabel('Error (CHF/MWh)')
-    ax.set_title('Model Performance Comparison')
-    ax.set_xticks(x)
-    ax.set_xticklabels(models)
-    ax.legend()
-    
-    # Add values on top of bars
-    def autolabel(rects):
+    def autolabel(rects, ax):
         for rect in rects:
             height = rect.get_height()
             ax.annotate(f'{height:.1f}',
@@ -279,14 +274,55 @@ def generate_comparison_plot():
                         xytext=(0, 3),  # 3 points vertical offset
                         textcoords="offset points",
                         ha='center', va='bottom', fontsize=10)
-                        
-    autolabel(rects1)
-    autolabel(rects2)
     
+    # Plot 1: Week-Ahead (Single-Split)
+    plt.figure(figsize=(8, 5))
+    models_week = ['Linear Reg.', 'LightGBM', 'TFT']
+    mae_scores_week = [mae_lr, mae_lgbm, mae_tft]
+    rmse_scores_week = [rmse_lr, rmse_lgbm, rmse_tft]
+    
+    x_week = np.arange(len(models_week))
+    width = 0.35
+    
+    fig, ax = plt.subplots(figsize=(8, 5))
+    rects1 = ax.bar(x_week - width/2, mae_scores_week, width, label='MAE', color='skyblue')
+    rects2 = ax.bar(x_week + width/2, rmse_scores_week, width, label='RMSE', color='salmon')
+    
+    ax.set_ylabel('Error (CHF/MWh)')
+    ax.set_title('Single-Shot (Week-Ahead) Error Comparison')
+    ax.set_xticks(x_week)
+    ax.set_xticklabels(models_week)
+    ax.legend()
+    autolabel(rects1, ax)
+    autolabel(rects2, ax)
     plt.tight_layout()
-    plt.savefig("reports/error_comparison.png", dpi=300)
+    plt.savefig("reports/error_comparison_week_ahead.png", dpi=300)
     plt.close('all')
-    print("Error comparison plot saved to reports/error_comparison.png")
+    
+    # Plot 2: Day-Ahead (Rolling Walk-Forward)
+    plt.figure(figsize=(8, 5))
+    models_day = ['Linear Reg.', 'LightGBM', 'TFT']
+    mae_scores_day = [mae_lr_rolling, mae_lgbm_rolling, mae_tft_rolling]
+    rmse_scores_day = [rmse_lr_rolling, rmse_lgbm_rolling, rmse_tft_rolling]
+    
+    x_day = np.arange(len(models_day))
+    
+    fig, ax = plt.subplots(figsize=(8, 5))
+    rects1 = ax.bar(x_day - width/2, mae_scores_day, width, label='MAE', color='skyblue')
+    rects2 = ax.bar(x_day + width/2, rmse_scores_day, width, label='RMSE', color='salmon')
+    
+    ax.set_ylabel('Error (CHF/MWh)')
+    ax.set_title('Walk-Forward (Rolling Day-Ahead) Error Comparison')
+    ax.set_xticks(x_day)
+    ax.set_xticklabels(models_day)
+    ax.legend()
+    autolabel(rects1, ax)
+    autolabel(rects2, ax)
+    plt.tight_layout()
+    plt.savefig("reports/error_comparison_day_ahead.png", dpi=300)
+    plt.close('all')
+    
+    print("Error comparison plots saved.")
     
     print("Script finished successfully. Exiting cleanly to avoid PyTorch teardown crashes.")
     os._exit(0)
