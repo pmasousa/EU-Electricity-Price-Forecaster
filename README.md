@@ -37,7 +37,9 @@ This represents the error on a single static 7-day test set. Because this is a D
 This is a much more robust and realistic metric. We give the model the history up to Day $T$, ask for Day $T+1$, and then slide the window forward by 24 hours. We repeat this for the entire 7-day validation set. This evaluates the model's true **Day-Ahead** performance without the penalty of 7-day auto-regression!
 | Model | MAE (CHF/MWh) | RMSE (CHF/MWh) |
 |-------|---------------|----------------|
-| Temporal Fusion Transformer | **~24.50** | **~33.19** |
+| Linear Regression Baseline | ~15.15 | ~17.35 |
+| LightGBM Baseline | ~9.33 | ~11.66 |
+| Temporal Fusion Transformer | ~24.50 | ~33.19 |
 
 *(Note: Exact metrics vary based on the specific historical volatility and the duration of the dataset used).*
 
