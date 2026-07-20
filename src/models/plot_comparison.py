@@ -17,6 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from src.data.dataset import load_and_prepare_data
 from darts.models import NaiveSeasonal, TFTModel
 from darts.metrics import mae, rmse
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pandas as pd
 import numpy as np
 import time
@@ -68,17 +69,20 @@ def generate_comparison_plot():
         tft = TFTModel(
             input_chunk_length=24*3,
             output_chunk_length=24,
-            hidden_size=16,
-            lstm_layers=1,
+            hidden_size=64,
+            lstm_layers=2,
             num_attention_heads=4,
-            dropout=0.1,
+            dropout=0.3,
             batch_size=1024,
-            n_epochs=2,
+            n_epochs=100,
             add_relative_index=False,
             random_state=42,
             pl_trainer_kwargs={
                 "accelerator": "cuda" if torch.cuda.is_available() else "cpu",
-                "devices": [0] if torch.cuda.is_available() else "auto"
+                "devices": [0] if torch.cuda.is_available() else "auto",
+                "callbacks": [
+                    EarlyStopping(monitor="val_loss", patience=15, min_delta=0.001, mode="min")
+                ]
             }
         )
         tft.fit(series=train, past_covariates=past_train, future_covariates=future_train, val_series=val, val_past_covariates=past_val, val_future_covariates=future_val)
@@ -148,31 +152,29 @@ def generate_comparison_plot():
     # Find latest metrics.csv
     try:
         log_dirs = glob.glob("reports/logs/tft_logs/version_*")
-        if log_dirs:
+        valid_log_dirs = [d for d in log_dirs if os.path.exists(os.path.join(d, "metrics.csv"))]
+        if valid_log_dirs:
             # Sort by version number
-            latest_log_dir = sorted(log_dirs, key=lambda x: int(x.split('version_')[-1]))[-1]
+            latest_log_dir = sorted(valid_log_dirs, key=lambda x: int(x.split('version_')[-1]))[-1]
             metrics_path = os.path.join(latest_log_dir, "metrics.csv")
             
-            if os.path.exists(metrics_path):
-                metrics_df = pd.read_csv(metrics_path)
-                if 'train_loss' in metrics_df.columns:
-                    train_loss = metrics_df[['epoch', 'train_loss']].dropna().groupby('epoch').mean()
-                    plt.plot(train_loss.index, train_loss['train_loss'], label="Train Loss", color="blue", linewidth=2)
-                if 'val_loss' in metrics_df.columns:
-                    val_loss = metrics_df[['epoch', 'val_loss']].dropna().groupby('epoch').mean()
-                    plt.plot(val_loss.index, val_loss['val_loss'], label="Validation Loss", color="orange", linewidth=2)
-                plt.title("TFT Learning Curve (Loss per Epoch)", fontsize=14)
-                plt.xlabel("Epoch", fontsize=12)
-                plt.ylabel("Loss", fontsize=12)
-                plt.legend(loc='upper right')
-                plt.grid(True, alpha=0.3)
-                
-                plt.savefig("reports/learning_curve.png", dpi=300, bbox_inches='tight')
-                print("Learning curve saved to reports/learning_curve.png")
-            else:
-                print("Metrics file not found. Could not generate learning curve.")
+            metrics_df = pd.read_csv(metrics_path)
+            if 'train_loss' in metrics_df.columns:
+                train_loss = metrics_df[['epoch', 'train_loss']].dropna().groupby('epoch').mean()
+                plt.plot(train_loss.index, train_loss['train_loss'], label="Train Loss", color="blue", linewidth=2)
+            if 'val_loss' in metrics_df.columns:
+                val_loss = metrics_df[['epoch', 'val_loss']].dropna().groupby('epoch').mean()
+                plt.plot(val_loss.index, val_loss['val_loss'], label="Validation Loss", color="orange", linewidth=2)
+            plt.title("TFT Learning Curve (Loss per Epoch)", fontsize=14)
+            plt.xlabel("Epoch", fontsize=12)
+            plt.ylabel("Loss", fontsize=12)
+            plt.legend(loc='upper right')
+            plt.grid(True, alpha=0.3)
+            
+            plt.savefig("reports/learning_curve.png", dpi=300, bbox_inches='tight')
+            print(f"Learning curve (from {latest_log_dir}) saved to reports/learning_curve.png")
         else:
-            print("No training logs found. Could not generate learning curve.")
+            print("No training logs with metrics.csv found. Could not generate learning curve.")
     except Exception as e:
         print(f"Error loading learning curve: {e}")
     finally:
@@ -285,6 +287,9 @@ def generate_comparison_plot():
     plt.savefig("reports/error_comparison.png", dpi=300)
     plt.close('all')
     print("Error comparison plot saved to reports/error_comparison.png")
+    
+    print("Script finished successfully. Exiting cleanly to avoid PyTorch teardown crashes.")
+    os._exit(0)
 
 if __name__ == "__main__":
     generate_comparison_plot()

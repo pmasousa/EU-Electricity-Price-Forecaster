@@ -19,6 +19,7 @@ from darts.metrics import mae, rmse
 from darts.dataprocessing.transformers import Scaler
 from pytorch_lightning.loggers import CSVLogger
 from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import matplotlib.pyplot as plt
 import pandas as pd
 import time
@@ -70,19 +71,22 @@ def train_tft():
     tft = TFTModel(
         input_chunk_length=input_chunk_length,
         output_chunk_length=output_chunk_length,
-        hidden_size=16,
-        lstm_layers=1,
-        num_attention_heads=4,
-        dropout=0.1,
+        hidden_size=64,
+        lstm_layers=2,
+        num_attention_heads=8,
+        dropout=0.3,
         batch_size=1024,
-        n_epochs=30,
+        n_epochs=100,
         add_relative_index=False,
         random_state=42,
         pl_trainer_kwargs={
             "logger": CSVLogger("reports/logs", name="tft_logs"),
             "accelerator": "cuda" if torch.cuda.is_available() else "cpu",
             "devices": [0] if torch.cuda.is_available() else "auto",
-            "callbacks": [GlobalTimerCallback()]
+            "callbacks": [
+                GlobalTimerCallback(),
+                EarlyStopping(monitor="val_loss", patience=15, min_delta=0.001, mode="min")
+            ]
         }
     )
     
@@ -126,6 +130,15 @@ def train_tft():
         f.write(f"TFT Model (Single-Shot Week-Ahead)\n")
         f.write(f"MAE: {mae_score:.2f}\n")
         f.write(f"RMSE: {rmse_score:.2f}\n\n")
+
+    print("Script finished successfully. Cleaning up PyTorch resources...")
+    
+    # Clean up to avoid teardown crashes without using os._exit(0) which causes exit code 3221226505 on Windows
+    del tft
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     train_tft()

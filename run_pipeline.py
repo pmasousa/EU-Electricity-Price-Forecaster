@@ -1,4 +1,5 @@
 import subprocess
+import argparse
 import sys
 import os
 
@@ -16,6 +17,10 @@ def run_script(script_path):
     print(f"Successfully finished {script_path}\n")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the forecasting pipeline.")
+    parser.add_argument("--start-from", type=str, default=None, help="Script path to start the pipeline from.")
+    args = parser.parse_args()
+
     # Ensure we are in the project root
     if not os.path.exists("src"):
         print("Error: Please run this script from the project root directory.")
@@ -30,6 +35,15 @@ if __name__ == "__main__":
         "src/models/backtest.py",
         "src/models/plot_comparison.py"
     ]
+    
+    if args.start_from:
+        if args.start_from in scripts:
+            start_index = scripts.index(args.start_from)
+            scripts = scripts[start_index:]
+            print(f"Resuming pipeline from {args.start_from}...")
+        else:
+            print(f"Error: {args.start_from} is not a valid script in the pipeline.")
+            sys.exit(1)
     
     print("Starting Swiss Electricity Price Forecaster Pipeline...")
     for script in scripts:
