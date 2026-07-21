@@ -42,7 +42,7 @@ def train_and_evaluate_baselines():
     }
     
     os.makedirs("reports", exist_ok=True)
-    with open("reports/metrics.txt", "w") as f:
+    with open("reports/metrics.txt", "w") as f, open("reports/backtest_metrics.txt", "w") as bf:
         print(f"\n--- Baseline Model Evaluation ---")
         
         for name, model in baselines.items():
@@ -87,10 +87,9 @@ def train_and_evaluate_baselines():
             print(f"Backtest RMSE: {backtest_rmse:.2f} CHF/MWh\n")
             
             # Write to backtest_metrics.txt as well
-            with open("reports/backtest_metrics.txt", "a") as bf:
-                bf.write(f"Backtest: {name}\n")
-                bf.write(f"MAE: {backtest_mae:.2f}\n")
-                bf.write(f"RMSE: {backtest_rmse:.2f}\n\n")
+            bf.write(f"Backtest: {name}\n")
+            bf.write(f"MAE: {backtest_mae:.2f}\n")
+            bf.write(f"RMSE: {backtest_rmse:.2f}\n\n")
 
 if __name__ == "__main__":
     train_and_evaluate_baselines()
