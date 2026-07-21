@@ -32,7 +32,6 @@ if __name__ == "__main__":
         "src/features/build_features.py",
         "src/models/baseline.py",
         "src/models/train_tft.py",
-        "src/models/backtest.py",
         "src/models/plot_comparison.py"
     ]
     
