@@ -1,70 +1,52 @@
 <div align="center">
-  <h1>⚡ Swiss Day-Ahead Electricity Price Forecaster</h1>
-  <p><i>A probabilistic time-series forecasting model designed for the highly volatile European/Swiss energy spot market.</i></p>
-  
-  #### Error Distribution
-<details>
-<summary>View Error Distribution Comparison</summary>
-
-**Single-Shot (Week-Ahead) Error**
-<img src="reports/error_comparison_week_ahead.png" alt="Week-Ahead Error Comparison" width="800"/>
-
-**Rolling (Day-Ahead) Error**
-<img src="reports/error_comparison_day_ahead.png" alt="Day-Ahead Error Comparison" width="800"/>
-</details>
+  <h1>⚡ Multi-Country Electricity Price Forecaster</h1>
+  <p><i>A probabilistic day-ahead electricity price forecasting model for European bidding zones — Switzerland, Portugal, Spain, and more.</i></p>
 </div>
 
 ---
 
 ## 📖 Overview
 
-The **Swiss Electricity Price Forecaster** predicts the next day's hourly electricity prices (EPEX SPOT CH) by analyzing historical price data, localized weather forecasts, grid load estimations, and cross-border energy flows.
+The **Electricity Price Forecaster** predicts the next day's hourly electricity prices for one or more countries by analyzing historical price data, localized weather, and grid load. It implements an end-to-end ML pipeline using a **Temporal Fusion Transformer (TFT)** for probabilistic, uncertainty-aware forecasts, and can **compare forecasts across countries** side by side.
 
-This project implements an end-to-end Machine Learning pipeline utilizing advanced Deep Sequence Modeling (Temporal Fusion Transformers) to provide both highly accurate and explainable predictions.
+Supported out of the box (config-driven — add more in `src/config.py`):
+
+| Code | Country      | Bidding zone | Weather station |
+|------|--------------|--------------|-----------------|
+| CH   | Switzerland  | CH           | Zurich          |
+| PT   | Portugal     | PT           | Lisbon          |
+| ES   | Spain        | ES           | Madrid          |
 
 ## ✨ Features
 
-- **Automated Data Pipelines:** Fetches live data from the ENTSO-E Transparency Platform and Open-Meteo APIs.
-- **Deep Sequence Modeling:** Leverages PyTorch Forecasting and `darts` to train a Temporal Fusion Transformer (TFT).
-- **Walk-forward Backtesting:** Simulates real-world trading P&L on the EPEX SPOT CH bidding zone.
-- **FastAPI Backend:** A robust REST API to serve predictions and handle CORS.
-- **Interactive UI Demo:** A Gradio dashboard to visualize predictions in real-time.
+- **Multi-country:** Train and serve a separate model per country; compare them in one view.
+- **Config-driven countries:** Add a bidding zone by adding one entry to `src/config.py`.
+- **Automated data pipelines:** Fetches live data from the **Energy-Charts API** (EPEX SPOT / ENTSO-E transparency aggregator) and **Open-Meteo**. **No API keys required.**
+- **Deep sequence modeling:** Temporal Fusion Transformer via `darts` + PyTorch, with quantile outputs (10/50/90).
+- **Walk-forward backtesting:** Rolling day-ahead evaluation against Linear Regression and LightGBM baselines.
+- **FastAPI backend:** REST endpoints for single-country forecasts, cross-country comparison, per-country metrics, and price summaries.
+- **Interactive Gradio UI:** Country selector, overlay plots, metrics & summary tables.
 
-## 📈 Model Performance
+## 🔌 Data sources
 
-Evaluating time-series models on a single validation split can be overly optimistic or pessimistic depending on the specific week chosen. Therefore, we evaluate our models using both a standard single-split and a robust **Walk-Forward Backtesting** approach against strong Linear Regression and LightGBM baselines.
+- **Day-ahead prices & actual load** — [Energy-Charts API](https://api.energy-charts.info) (`/price?bzn=<ZONE>` and `/public_power?country=<cc>`). This aggregates EPEX SPOT / ENTSO-E Transparency Platform data. **No API key.**
+- **Weather** — [Open-Meteo Archive API](https://archive-api.open-meteo.com/v1/archive). **No API key.**
 
-### 1. Single-Split Validation (Week-Ahead Auto-Regression)
-This represents the error on a single static 7-day test set. Because this is a Day-Ahead model (trained to predict 24 hours), forecasting a full 7 days (168 hours) in one shot forces the model to use **auto-regression** (feeding its own predictions back into itself to predict further into the future). This naturally degrades accuracy compared to a true 24-hour prediction.
-| Model | MAE (CHF/MWh) | RMSE (CHF/MWh) |
-|-------|---------------|----------------|
-| Linear Regression Baseline | ~42.45 | ~48.55 |
-| LightGBM Baseline | ~40.16 | ~48.10 |
-| Temporal Fusion Transformer | **~36.88** | **~47.71** |
-
-### 2. Rolling Day-Ahead Backtest (Walk-Forward)
-This is a much more robust and realistic metric. We give the model the history up to Day $T$, ask for Day $T+1$, and then slide the window forward by 24 hours. We repeat this for the entire 7-day validation set. This evaluates the model's true **Day-Ahead** performance without the penalty of 7-day auto-regression!
-| Model | MAE (CHF/MWh) | RMSE (CHF/MWh) |
-|-------|---------------|----------------|
-| Linear Regression Baseline | ~15.15 | ~17.35 |
-| LightGBM Baseline | ~9.33 | ~11.66 |
-| Temporal Fusion Transformer | ~24.50 | ~33.19 |
-
-*(Note: Exact metrics vary based on the specific historical volatility and the duration of the dataset used).*
+> **Note on resolution.** Some bidding zones (e.g. ES, PT) publish day-ahead prices at 15-minute resolution, while others (e.g. CH) are hourly. The download layer resamples all series to a common **hourly** grid so features stay aligned. All prices are in **EUR/MWh** for every zone (Energy-Charts reports CH in EUR/MWh too).
 
 ## 🚀 Getting Started
 
-### 1. Environment Setup
+### 1. Environment setup
 
 Ensure you have Python >= 3.11 installed.
 
 > [!WARNING]
-> While you can use tools like `uv` for fast dependency management, it currently struggles to resolve **PyTorch Nightly** builds. If you are using an RTX 50-series GPU (e.g., RTX 5070) which requires PyTorch Nightly for CUDA 12.4 support, you must use standard `pip` as shown below.
+> If you use an RTX 50-series GPU requiring PyTorch Nightly (CUDA 12.4+), `uv` may struggle to resolve it — use standard `pip` as shown below.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/swiss_electricity_price_forecaster.git
-cd swiss_electricity_price_forecaster
+git clone https://github.com/pmasousa/EU-Electricity-Price-Forecaster.git
+cd EU-Electricity-Price-Forecaster
 
 # Create and activate a virtual environment
 python -m venv .venv
@@ -72,77 +54,117 @@ python -m venv .venv
 .venv\Scripts\activate
 # On Linux/macOS: source .venv/bin/activate
 
-# Install regular dependencies
+# Install dependencies
 pip install .
 
-# IF you have an RTX 50-series GPU, install PyTorch Nightly (CUDA 12.4):
+# (RTX 50-series only) PyTorch Nightly for CUDA 12.4:
 pip install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cu124 --force-reinstall
 ```
 
+> **Repo rename:** if you renamed the GitHub repository in Settings, update the clone URL above to match.
+
 ### 2. Configuration
 
-We use the free and open **Energy-Charts API** and **Open-Meteo API** to fetch real electricity and weather data automatically. **No API keys required**
+Countries live in `src/config.py`. To add a new country, append one entry:
 
-### 3. Running the Pipeline
+```python
+COUNTRIES = {
+    ...
+    "FR": {"name": "France", "bzn": "FR", "country": "fr",
+           "lat": 48.8566, "lon": 2.3522, "tz": "Europe/Paris"},
+}
+```
 
-You can run the entire machine learning pipeline end-to-end with a single command:
+The bidding-zone code (`bzn`) and country code (`country`) must match values accepted by the Energy-Charts API. Run a quick check before trusting a new zone:
 
 ```bash
+curl "https://api.energy-charts.info/price?bzn=FR&start=2026-07-01&end=2026-07-02"
+```
+
+### 3. Running the pipeline
+
+Run the full multi-country pipeline (downloads ~3 years of data, builds features, trains baselines + a TFT per country, and generates comparison plots):
+
+```bash
+# All countries in src/config.py
 python run_pipeline.py
+
+# Or a subset
+python run_pipeline.py --countries CH,PT,ES
+
+# Resume from a specific stage
+python run_pipeline.py --start-from src/models/train_tft.py --countries PT
 ```
 
-This unified script will sequentially execute:
-1. Data Acquisition (ENTSO-E & Open-Meteo)
-2. Feature Engineering
-3. Baseline Evaluation
-4. Deep Sequence Modeling (TFT)
-5. Walk-forward Backtesting
-6. Comparison Plot Generation
+The pipeline runs, **per country**: data download → feature engineering → baseline evaluation → TFT training → comparison plots. Artifacts are namespaced by country:
 
-### 4. Running the Demo Application
+- Data: `data/raw/entsoe_prices_{CC}.csv`, `entsoe_load_{CC}.csv`, `weather_{CC}.csv`
+- Features: `data/processed/features_{CC}.csv`
+- Models: `models/tft_model_{CC}.pt`, `models/scaler_target_{CC}.pkl`, `models/scaler_future_{CC}.pkl`
+- Plots: `reports/forecast_comparison_{CC}.png`, `reports/rolling_forecast_comparison_{CC}.png`, ...
+- Metrics: `reports/metrics.txt` (per-country sections), `reports/backtest_metrics.txt`
 
-You have two options for running the demo: locally via Python or containerized via Docker.
+### 4. Running the demo
 
-**Important:** Because model weights (`models/`) and datasets (`data/`) are not committed to Git, you **must** complete Step 3 (`python run_pipeline.py`) to generate them before attempting to start the API or UI.
+> Models (`models/`) and datasets (`data/`) are gitignored — run the pipeline (Step 3) first.
 
-#### Option A: Local Python Environment
-Start the backend API and the frontend dashboard in separate terminal windows:
+#### Option A: Local
 
-**Terminal 1 (Backend API):**
 ```bash
+# Terminal 1 — backend API (http://localhost:8000)
 python -m src.api.main
-```
-The API will be available at `http://localhost:8000`.
 
-**Terminal 2 (Gradio UI):**
-```bash
+# Terminal 2 — Gradio UI (http://localhost:7860)
 python -m src.api.app
 ```
-Open your browser to `http://localhost:7860`.
 
 #### Option B: Docker Compose
-If you prefer to run the API and UI in isolated containers, simply run:
+
 ```bash
 docker-compose up --build
 ```
-This will spin up both the backend and frontend simultaneously. Open your browser to `http://localhost:7860`.
 
-## 🛠️ Tech Stack
+The UI reads the backend base URL from `API_URL` (defaults to `http://127.0.0.1:8000`; set to `http://api:8000` under Docker).
 
-- **Data Processing:** `pandas`, `numpy`
-- **Forecasting:** `darts`, `PyTorch`
-- **APIs:** `openmeteo-requests`, `requests`
-- **Deployment:** `FastAPI`, `Gradio`, `Docker`
+## 🌐 API reference
 
-## Architecture & Implementation Notes
+All prices are in **EUR/MWh**. The API loads every country model that has artifacts at startup and skips the rest.
 
-### Deep Learning Architecture
-- **Multi-Horizon Forecasting:** To avoid the compounding errors inherent in standard auto-regressive LSTMs (which predict one step iteratively), the Temporal Fusion Transformer (TFT) utilizes a seq-to-seq architecture. It processes a 72-hour lookback window to directly output the entire 24-hour day-ahead curve in a single shot.
-- **Probabilistic Forecasting:** Energy markets are prone to extreme price spikes. Instead of minimizing standard Mean Squared Error (which is highly sensitive to outliers), the TFT is configured with `QuantileRegression`. The model outputs a probabilistic distribution (e.g., 10th, 50th, 90th percentiles), quantifying uncertainty rather than forcing a deterministic point forecast.
-- **Cyclic Feature Encoding:** Electricity prices exhibit strong daily and weekly seasonality. Raw time features (hour, day of week) were encoded using sine/cosine transformations to ensure the attention mechanism perceives time continuously without artificial zero-hour discontinuities.
-- **Strict Covariate Separation:** The data pipeline strictly separates `past_covariates` (historical load/prices) and `future_covariates` (weather, calendar events). Scalers are fitted exclusively on the training split to prevent look-ahead bias and data leakage during the walk-forward backtest.
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | Health check; lists loaded and available countries. |
+| `GET /predict?country=PT&target_date=YYYY-MM-DD` | 24h forecast for one country with 10/50/90 quantile bands. `country` defaults to the first loaded country; `target_date` is optional (retroactive comparison). |
+| `GET /compare?countries=CH,PT,ES&target_date=YYYY-MM-DD` | Forecasts for multiple countries in one payload, for overlay plots. Countries without a loaded model are reported in `skipped`. |
+| `GET /metrics` | Per-country model metrics (MAE/RMSE) parsed from `reports/metrics.txt`. |
+| `GET /summary?countries=CH,PT,ES` | Price-level summary per country: mean/median/min/max forecast price and peak hour. |
 
-### MLOps & Deployment
-- **Hardware-Agnostic Inference:** The model was trained using PyTorch Lightning with `CUDAAccelerator` (RTX 50-series). To deploy the API on CPU environments, the model's inner `trainer_params` are dynamically intercepted and overridden in memory during hydration (`accelerator='cpu'`).
-- **Secure Deserialization:** PyTorch 2.6 defaults to `weights_only=True`, which blocks custom likelihood classes. The `QuantileRegression` distribution was added to `torch.serialization.add_safe_globals` to ensure secure loading in production.
-- **Dynamic Backtesting API:** The `/predict` endpoint supports retroactive queries by dynamically slicing the historical time-series dataframe 72 hours prior to the requested timestamp, returning a merged payload of predictions vs. actuals for frontend visualization.
+Response field names (note the EUR currency):
+
+```jsonc
+{
+  "country": "PT", "country_name": "Portugal",
+  "forecast": [
+    { "timestamp": "...", "predicted_price_eur_mwh": 62.4, "q10": 50.1, "q90": 74.8,
+      "actual_price_eur_mwh": 61.0 }   // actual only present for retroactive queries
+  ]
+}
+```
+
+## 🛠️ Tech stack
+
+- **Data processing:** `pandas`, `numpy`
+- **Forecasting:** `darts`, `PyTorch` (Temporal Fusion Transformer, `QuantileRegression`)
+- **Weather:** `openmeteo-requests`
+- **Serving:** `FastAPI`, `Gradio`, `Docker`
+
+## Architecture & implementation notes
+
+- **Per-country models.** Each country gets its own TFT, scalers, and feature table, isolated by a country suffix. This keeps performance per market independent and makes adding a country a config-only change at the data layer.
+- **Multi-horizon forecasting.** The TFT processes a 168-hour (7-day) lookback and directly outputs the 24-hour day-ahead curve in one shot, avoiding auto-regressive error compounding.
+- **Probabilistic forecasting.** Configured with `QuantileRegression`, the model outputs a distribution (10/50/90 percentiles) to quantify uncertainty — important in spike-prone markets.
+- **Hourly normalization.** Download resamples any resolution to hourly so the per-country feature columns are consistent (6 base columns + calendar + cyclic encodings = 17 features).
+- **Strict covariate separation.** `future_covariates` (weather, calendar) are separated from the target, and scalers are fitted only on the training split to prevent leakage during walk-forward backtesting.
+- **Hardware-agnostic inference.** `trainer_params` are overridden to `accelerator='cpu'` at load time, so GPU-trained models serve on CPU.
+- **Secure deserialization.** `QuantileRegression` and `GlobalTimerCallback` are registered via `torch.serialization.add_safe_globals` for safe unpickling (PyTorch 2.6+ `weights_only` default).
+
+> **Known environment caveat (torch nightly vs darts 0.45).** Loading a previously-saved TFT checkpoint can fail with `PLForecastingModule.__init__() got an unexpected keyword argument 'weights_only'` on very recent PyTorch nightlies. This is a darts/torch version interaction, not a project bug — pin to a compatible torch release (e.g. a stable 2.x) if you hit it. Re-running `python run_pipeline.py --start-from src/models/train_tft.py` retrains against the installed versions.

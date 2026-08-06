@@ -1,18 +1,17 @@
 [project]
-name = "swiss-electricity-price-forecaster"
-version = "0.1.0"
-description = "A time-series forecasting model for the Swiss day-ahead electricity spot market."
+name = "electricity-price-forecaster"
+version = "0.2.0"
+description = "A multi-country day-ahead electricity spot price forecasting model (Temporal Fusion Transformer)."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "torch",
     "pandas",
     "numpy",
-    "darts[torch]==0.45.0",
+    "darts[torch]==0.46.1",
     "fastapi",
     "uvicorn[standard]",
     "python-dotenv",
-    "entsoe-py",
     "openmeteo-requests",
     "requests-cache",
     "retry-requests",
@@ -20,7 +19,8 @@ dependencies = [
     "scikit-learn",
     "mlflow",
     "gradio",
-    "numba>=0.58.0"
+    "numba>=0.58.0",
+    "lightgbm"
 ]
 
 [tool.uv]
