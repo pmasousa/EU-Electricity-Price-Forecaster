@@ -6,6 +6,7 @@
       <img src="https://github.com/pmasousa/EU-Electricity-Price-Forecaster/actions/workflows/ci.yml/badge.svg" alt="CI">
     </a>
   </p>
+  <p><img src="docs/demo.gif" alt="Forecasting demo: PT forecast, ES forecast, three-country comparison, metrics" width="720"></p>
 </div>
 
 ---
