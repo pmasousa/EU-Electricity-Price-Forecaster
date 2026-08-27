@@ -50,3 +50,6 @@ reports/
 
 # Stray PyTorch Lightning tensorboard output (test/predict runs)
 lightning_logs/
+
+# Gradio runtime cache (self-generated certs/tokens)
+.gradio/

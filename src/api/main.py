@@ -306,7 +306,7 @@ def predict_next_day(
 @app.get("/compare")
 def compare_countries(
     countries: str = Query(default=None,
-                           description="Comma-separated country codes, e.g. CH,PT,ES. "
+                           description="Comma-separated country codes, e.g. PT,ES,CH. "
                                        "Defaults to all loaded countries."),
     target_date: str | None = None,
 ):

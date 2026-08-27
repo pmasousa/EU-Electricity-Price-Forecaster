@@ -7,7 +7,7 @@ features, dataset, training, API, UI) reads from here.
 Data sources (no API keys required):
     - Day-ahead prices & actual load: Energy-Charts API (api.energy-charts.info),
       which aggregates EPEX SPOT / ENTSO-E transparency data. Verified working
-      for CH, PT, ES with an identical JSON schema.
+      for PT, ES, CH with an identical JSON schema.
     - Weather: Open-Meteo Archive API (archive-api.open-meteo.com).
 
 Notes:
@@ -22,14 +22,6 @@ Notes:
 # metadata: human-readable name, Energy-Charts bidding-zone + country codes, and
 # the representative weather station coordinates + timezone.
 COUNTRIES = {
-    "CH": {
-        "name": "Switzerland",
-        "bzn": "CH",
-        "country": "ch",
-        "lat": 47.3667,
-        "lon": 8.55,
-        "tz": "Europe/Zurich",
-    },
     "PT": {
         "name": "Portugal",
         "bzn": "PT",
@@ -46,10 +38,18 @@ COUNTRIES = {
         "lon": -3.7038,
         "tz": "Europe/Madrid",
     },
+    "CH": {
+        "name": "Switzerland",
+        "bzn": "CH",
+        "country": "ch",
+        "lat": 47.3667,
+        "lon": 8.55,
+        "tz": "Europe/Zurich",
+    },
 }
 
 # Countries processed by default when running the full pipeline or API startup.
-DEFAULT_COUNTRIES = ["CH", "PT", "ES"]
+DEFAULT_COUNTRIES = ["PT", "ES", "CH"]
 
 # Country served when /predict is called without an explicit country (used
 # only if that country's serving bundle is loaded; otherwise the first
@@ -67,7 +67,7 @@ def get_country(code: str) -> dict:
 
 
 def parse_countries(spec: str | None = None) -> list[str]:
-    """Parse a comma-separated country list (e.g. 'CH,PT,ES') into validated codes.
+    """Parse a comma-separated country list (e.g. 'PT,ES,CH') into validated codes.
 
     Returns DEFAULT_COUNTRIES when ``spec`` is empty/None. Unknown codes raise.
     """

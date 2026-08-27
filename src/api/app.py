@@ -273,7 +273,7 @@ with gr.Blocks(title="Electricity Price Forecaster", theme=gr.themes.Soft()) as 
         with gr.Row():
             compare_countries_box = gr.Textbox(
                 label="Countries (comma-separated)", value=",".join(DEFAULT_COUNTRIES),
-                placeholder="e.g. CH,PT,ES",
+                placeholder="e.g. PT,ES,CH",
             )
             compare_target_date = gr.Textbox(label="Past Date (YYYY-MM-DD, optional)",
                                              placeholder="e.g. 2026-06-01")
