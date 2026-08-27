@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feat/*]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # CPU-only torch first: the unpinned `torch` project dependency is then
+      # already satisfied, so pip never pulls the ~2GB CUDA build. Local GPU
+      # development keeps using pip + nightly per the README — CI never needs it.
+      - name: Install CPU torch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install project
+        run: pip install -e .
+
+      - name: Install dev tools
+        run: pip install pytest ruff
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Tests
+        run: pytest tests/ -v
+        env:
+          # Model/scaler artifacts and data are gitignored; the API contract
+          # test skips itself when they are absent (e.g. on a fresh CI runner).
+          CI: "true"

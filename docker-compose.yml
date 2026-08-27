@@ -1,23 +1,64 @@
-version: '3.8'
+# Multi-service Docker setup for the Electricity Price Forecaster.
+#
+# Three concerns, three profiles:
+#   1. `train`   — one-shot: runs the full ML pipeline (download -> features ->
+#                  baselines -> TFT training -> plots) for the requested countries.
+#                  GPU-enabled. Produces models/, data/, reports/.
+#   2. `api`     — long-running FastAPI backend serving forecasts.
+#   3. `ui`      — long-running Gradio dashboard.
+#
+# Typical flow:
+#   docker compose run --rm train              # train all countries (CH,PT,ES)
+#   docker compose run --rm train --countries PT,ES   # train a subset
+#   docker compose up api ui                   # serve
+#
+# All services share ./data, ./models, ./reports via bind mounts so artifacts
+# produced by `train` are immediately visible to `api`/`ui` and on the host.
 
 services:
+  train:
+    build: .
+    container_name: forecaster_train
+    profiles: ["train"]
+    # GPU passthrough for RTX 50-series training (Blackwell sm_120).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+    # Using entrypoint (not command) so extra args passed to `docker compose run`
+    # are appended to `python run_pipeline.py`. Examples:
+    #   docker compose run --rm train                                   # all countries, full run
+    #   docker compose run --rm train --countries CH --days 90 --epochs 3   # fast smoke test
+    entrypoint: ["python", "run_pipeline.py"]
+
   api:
     build: .
-    container_name: swiss_forecaster_api
+    container_name: forecaster_api
+    profiles: ["serve"]
     ports:
       - "8000:8000"
     volumes:
       - ./data:/app/data
       - ./models:/app/models
+      - ./reports:/app/reports
     command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 
   ui:
     build: .
-    container_name: swiss_forecaster_ui
+    container_name: forecaster_ui
+    profiles: ["serve"]
     ports:
       - "7860:7860"
     environment:
-      - API_URL=http://api:8000/predict
+      # Base URL of the backend; the UI appends /predict, /compare, /metrics, /summary.
+      - API_URL=http://api:8000
     volumes:
       - ./data:/app/data
       - ./models:/app/models

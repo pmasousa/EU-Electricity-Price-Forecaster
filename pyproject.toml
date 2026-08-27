@@ -1,7 +1,7 @@
 [project]
-name = "swiss-electricity-price-forecaster"
-version = "0.1.0"
-description = "A time-series forecasting model for the Swiss day-ahead electricity spot market."
+name = "electricity-price-forecaster"
+version = "0.2.0"
+description = "A multi-country day-ahead electricity spot price forecasting model (Temporal Fusion Transformer)."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,7 +12,6 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "python-dotenv",
-    "entsoe-py",
     "openmeteo-requests",
     "requests-cache",
     "retry-requests",
@@ -20,15 +19,8 @@ dependencies = [
     "scikit-learn",
     "mlflow",
     "gradio",
-    "numba>=0.58.0"
-]
-
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.0.0",
-    "ruff>=0.3.0",
-    "jupyter>=1.0.0",
-    "pyright>=1.1.411",
+    "numba>=0.58.0",
+    "lightgbm"
 ]
 
 [tool.ruff]
@@ -37,3 +29,14 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "N", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Script-style entry points set up sys.path before importing src.* — the
+# resulting E402 is structural, not a smell.
+"run_pipeline.py" = ["E402"]
+"src/data/dataset.py" = ["E402"]
+"src/data/download_entsoe.py" = ["E402"]
+"src/data/download_weather.py" = ["E402"]
+"src/features/build_features.py" = ["E402"]
+"src/evaluation/backtest.py" = ["E402"]
+"src/evaluation/reconcile_q50.py" = ["E402"]
