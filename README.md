@@ -33,7 +33,7 @@ Supported out of the box (config-driven — add more in `src/config.py`):
 - **Deep sequence modeling:** Temporal Fusion Transformer via `darts` + PyTorch, with quantile outputs (10/50/90).
 - **Walk-forward backtesting:** One shared harness (`src/evaluation/backtest.py`) scores every model — naive persistence, Linear Regression, LightGBM, TFT — on identical splits, covariates, and a day-ahead protocol, with MAE/RMSE/rMAE.
 - **FastAPI backend:** REST endpoints for single-country forecasts, cross-country comparison, per-country metrics, and price summaries.
-- **Interactive Gradio UI:** Country selector, overlay plots, metrics & summary tables.
+- **Interactive dashboard (Streamlit + Plotly):** forecasts auto-load on open; country + model selection (TFT bands, Linear Regression, LightGBM); hover/zoom charts with click-to-toggle legend; dark mode; three-country comparison and the walk-forward benchmark table.
 
 ## 📊 Benchmark — day-ahead walk-forward
 
@@ -166,8 +166,8 @@ The pipeline runs, **per country**: data download → feature engineering → sh
 # Terminal 1 — backend API (http://localhost:8000)
 python -m src.api.main
 
-# Terminal 2 — Gradio UI (http://localhost:7860)
-python -m src.api.app
+# Terminal 2 — dashboard (http://localhost:8501)
+streamlit run src/api/dashboard.py
 ```
 
 #### Option B: Docker Compose
@@ -185,7 +185,7 @@ All prices are in **EUR/MWh**. The API loads every country model that has artifa
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Health check; lists loaded and available countries. |
-| `GET /predict?country=PT&target_date=YYYY-MM-DD` | 24h forecast for one country with 10/50/90 quantile bands. `country` defaults to the first loaded country; `target_date` is optional (retroactive comparison). |
+| `GET /predict?country=PT&model=tft&target_date=YYYY-MM-DD` | 24h forecast for one country. `model`: `tft` (default; q10/50/90 bands), `lr`, `lgbm` (point forecasts). `target_date` optional (retroactive). |
 | `GET /compare?countries=PT,ES,CH&target_date=YYYY-MM-DD` | Forecasts for multiple countries in one payload, for overlay plots. Countries without a loaded model are reported in `skipped`. |
 | `GET /metrics` | Per-country benchmark metrics (MAE/RMSE/rMAE) parsed from `reports/latest/benchmark_*.txt`. |
 | `GET /summary?countries=PT,ES,CH` | Price-level summary per country: mean/median/min/max forecast price and peak hour. |
@@ -207,7 +207,7 @@ Response field names (note the EUR currency):
 - **Data processing:** `pandas`, `numpy`
 - **Forecasting:** `darts`, `PyTorch` (Temporal Fusion Transformer, `QuantileRegression`)
 - **Weather:** `openmeteo-requests`
-- **Serving:** `FastAPI`, `Gradio`, `Docker`
+- **Serving:** `FastAPI`, `Streamlit`, `Plotly`, `Docker`
 
 ## Architecture & implementation notes
 

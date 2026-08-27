@@ -5,7 +5,7 @@
 #                  baselines -> TFT training -> plots) for the requested countries.
 #                  GPU-enabled. Produces models/, data/, reports/.
 #   2. `api`     — long-running FastAPI backend serving forecasts.
-#   3. `ui`      — long-running Gradio dashboard.
+#   3. `ui`      — long-running Streamlit dashboard.
 #
 # Typical flow:
 #   docker compose run --rm train              # train all countries (CH,PT,ES)
@@ -55,13 +55,13 @@ services:
     container_name: forecaster_ui
     profiles: ["serve"]
     ports:
-      - "7860:7860"
+      - "8501:8501"
     environment:
-      # Base URL of the backend; the UI appends /predict, /compare, /metrics, /summary.
+      # Base URL of the backend; the dashboard calls /predict, /compare, /metrics.
       - API_URL=http://api:8000
     volumes:
       - ./data:/app/data
       - ./models:/app/models
-    command: python -m src.api.app
+    command: streamlit run src/api/dashboard.py --server.port 8501 --server.headless true
     depends_on:
       - api

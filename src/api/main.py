@@ -3,6 +3,7 @@ import os
 import pickle
 import re
 import sys
+import threading
 from contextlib import asynccontextmanager
 
 import numpy as np
@@ -10,7 +11,7 @@ import pandas as pd
 import torch
 import uvicorn
 from darts import TimeSeries
-from darts.models import TFTModel
+from darts.models import LightGBMModel, LinearRegressionModel, TFTModel
 from darts.utils.likelihood_models.torch import QuantileRegression
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +27,12 @@ from src.config import (
     get_country,
     parse_countries,
 )
-from src.data.honest import COV_COLUMNS, future_covariate_rows, with_load_lags
+from src.data.honest import (
+    COV_COLUMNS,
+    future_covariate_rows,
+    read_features,
+    with_load_lags,
+)
 
 
 # Define dummy callback to allow pickle to load the model. Training scripts save
@@ -74,7 +80,9 @@ def _load_country_model(country: str):
             # Drop the training-time CSVLogger: it points at the training
             # machine's log folder, which a serving host doesn't have. darts
             # rebuilds a throwaway logger for predict.
-            model.trainer_params.pop('logger', None)
+            # False (not just popped): the throwaway logger darts would
+            # otherwise build races across concurrent predicts.
+            model.trainer_params['logger'] = False
 
         with open(scaler_target_path, "rb") as f:
             scaler_target = pickle.load(f)
@@ -96,8 +104,13 @@ def _load_country_model(country: str):
         return None
 
 
-# Map of country code -> {"model", "scaler_target", "scaler_future"} for loaded countries.
+# Map of country code -> bundle for loaded countries. "classical" holds the
+# Linear Regression and LightGBM refits served via /predict?model=lr|lgbm.
 MODELS: dict[str, dict] = {}
+
+# darts' predict path is not safe for concurrent calls from the threadpool
+# (shared throwaway artifacts); serialize forecasts instead.
+_PREDICT_LOCK = threading.Lock()
 
 
 @asynccontextmanager
@@ -110,6 +123,14 @@ async def lifespan(app: FastAPI):
         if loaded is not None:
             MODELS[country] = loaded
             print(f"Loaded model + scalers for {country}.")
+            try:
+                loaded["classical"] = _fit_classical_models(loaded, country)
+                print(f"Refit Linear Regression + LightGBM for {country} "
+                      f"(served via ?model=lr|lgbm).")
+            except Exception as e:
+                loaded["classical"] = {}
+                print(f"Warning: classical refit failed for {country} "
+                      f"({type(e).__name__}: {e}); serving TFT only.")
         else:
             print(f"Warning: model artifacts for {country} not found "
                   f"(run the pipeline for this country first). Skipping.")
@@ -143,7 +164,44 @@ def read_root():
     }
 
 
-def _forecast_one(country: str, target_date: str | None = None) -> dict:
+def _fit_classical_models(bundle: dict, country: str) -> dict:
+    """Refit Linear Regression + LightGBM on the exact harness recipe.
+
+    Same data, same split (from the serving config), same scalers — so the
+    classical forecasts the API serves are the models the benchmark scored.
+    Fits in seconds per country.
+    """
+    from darts import TimeSeries
+
+    cfg = bundle["config"]
+    df = with_load_lags(read_features(country)).dropna()
+    hold_n = cfg["split"]["holdout_weeks"] * 168
+    val_n = cfg["split"]["val_weeks"] * 168
+    train_n = len(df) - hold_n - val_n
+
+    y = TimeSeries.from_series(df["price"])
+    covs = TimeSeries.from_dataframe(df, value_cols=COV_COLUMNS)
+    y_scaled = bundle["scaler_target"].transform(y[:train_n])
+    cov_scaled = bundle["scaler_cov"].transform(covs[:train_n])
+
+    lr = LinearRegressionModel(lags=168, lags_future_covariates=[0])
+    lr.fit(series=y_scaled, future_covariates=cov_scaled)
+    lgbm = LightGBMModel(lags=168, lags_future_covariates=[0], verbose=-1)
+    lgbm.fit(series=y_scaled, future_covariates=cov_scaled)
+    return {"lr": lr, "lgbm": lgbm}
+
+
+def _validate_model(name: str | None) -> str:
+    name = (name or "tft").lower()
+    if name not in ("tft", "lr", "lgbm"):
+        raise HTTPException(
+            status_code=400, detail=f"Unknown model '{name}'. Use tft, lr or lgbm."
+        )
+    return name
+
+
+def _forecast_one(country: str, target_date: str | None = None,
+                  model_name: str = "tft") -> dict:
     """Core single-country forecast. Returns a payload dict with quantile bands."""
     if country not in MODELS:
         raise HTTPException(
@@ -230,28 +288,46 @@ def _forecast_one(country: str, target_date: str | None = None) -> dict:
         series_scaled = scaler_target.transform(series)
         future_scaled = scaler_cov.transform(future_covs)
 
-        # Predict 24 hours into the future using probabilistic sampling
-        pred_scaled = model.predict(
-            n=24,
-            series=series_scaled,
-            future_covariates=future_scaled,
-            num_samples=100
-        )
-
-        # Inverse transform
-        pred_real = scaler_target.inverse_transform(pred_scaled)
-
-        # Extract quantiles (and fail loudly instead of serving NaNs)
-        q10_vals = pred_real.quantile(0.1).values().flatten()
-        q50_vals = pred_real.quantile(0.5).values().flatten()
-        q90_vals = pred_real.quantile(0.9).values().flatten()
-        if not (np.isfinite(q10_vals).all() and np.isfinite(q50_vals).all()
-                and np.isfinite(q90_vals).all()):
-            raise HTTPException(
-                status_code=500,
-                detail=f"[{country}] non-finite forecast values — check the "
-                       f"covariate history for gaps.",
-            )
+        # Forecast: the TFT samples its fitted distribution (quantile bands);
+        # classical models are deterministic point forecasters.
+        if model_name == "tft":
+            with _PREDICT_LOCK:
+                pred_scaled = model.predict(
+                    n=24,
+                    series=series_scaled,
+                    future_covariates=future_scaled,
+                    num_samples=100
+                )
+            pred_real = scaler_target.inverse_transform(pred_scaled)
+            q10_vals = pred_real.quantile(0.1).values().flatten()
+            q50_vals = pred_real.quantile(0.5).values().flatten()
+            q90_vals = pred_real.quantile(0.9).values().flatten()
+            if not (np.isfinite(q10_vals).all() and np.isfinite(q50_vals).all()
+                    and np.isfinite(q90_vals).all()):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"[{country}] non-finite forecast values — check the "
+                           f"covariate history for gaps.",
+                )
+        else:
+            classical = bundle.get("classical", {}).get(model_name)
+            if classical is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Model '{model_name}' unavailable for {country}.",
+                )
+            with _PREDICT_LOCK:
+                pred_scaled = classical.predict(
+                    n=24, series=series_scaled, future_covariates=future_scaled
+                )
+            pred_real = scaler_target.inverse_transform(pred_scaled)
+            q50_vals = pred_real.values().flatten()
+            if not np.isfinite(q50_vals).all():
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"[{country}] non-finite forecast values.",
+                )
+            q10_vals = q90_vals = None
 
         # Format the response
         results = []
@@ -260,9 +336,10 @@ def _forecast_one(country: str, target_date: str | None = None) -> dict:
             res = {
                 "timestamp": ts_iso,
                 "predicted_price_eur_mwh": float(q50_vals[i]),
-                "q10": float(q10_vals[i]),
-                "q90": float(q90_vals[i]),
             }
+            if q10_vals is not None:
+                res["q10"] = float(q10_vals[i])
+                res["q90"] = float(q90_vals[i])
             if ts_iso in actual_prices:
                 res["actual_price_eur_mwh"] = actual_prices[ts_iso]
             results.append(res)
@@ -285,8 +362,10 @@ def predict_next_day(
     country: str = Query(default=None, description="Country code, e.g. CH/PT/ES. "
                           "Defaults to the first loaded country."),
     target_date: str | None = None,
+    model: str = Query(default="tft", description="Forecasting model: tft "
+                       "(quantile bands, default), lr or lgbm (point forecast)."),
 ):
-    """Single-country 24h forecast (EUR/MWh) with 10/50/90 quantile bands."""
+    """Single-country 24h forecast (EUR/MWh); q10/50/90 bands on the TFT."""
     country = (
         country
         or (DEFAULT_COUNTRY if DEFAULT_COUNTRY in MODELS else None)
@@ -300,7 +379,7 @@ def predict_next_day(
             status_code=400,
             detail=f"Unknown country '{country}'. Available: {sorted(COUNTRIES)}",
         )
-    return _forecast_one(country, target_date)
+    return _forecast_one(country, target_date, _validate_model(model))
 
 
 @app.get("/compare")
@@ -309,6 +388,7 @@ def compare_countries(
                            description="Comma-separated country codes, e.g. PT,ES,CH. "
                                        "Defaults to all loaded countries."),
     target_date: str | None = None,
+    model: str = Query(default="tft", description="tft (default), lr or lgbm."),
 ):
     """Return 24h forecasts for multiple countries in one payload (for overlay plots).
 
@@ -323,7 +403,7 @@ def compare_countries(
             skipped.append({"country": c, "reason": "model not loaded"})
             continue
         try:
-            results.append(_forecast_one(c, target_date))
+            results.append(_forecast_one(c, target_date, _validate_model(model)))
         except HTTPException as e:
             skipped.append({"country": c, "reason": e.detail})
     return {"forecasts": results, "skipped": skipped}
@@ -336,9 +416,9 @@ def _parse_benchmark_tables(latest_dir: str = "reports/latest") -> list[dict]:
     2+ spaces so it survives format tweaks. Only the point-forecast table is
     read — pinball/coverage sections are skipped.
     """
-    records: list[dict] = []
+    index: dict[tuple, dict] = {}
     if not os.path.isdir(latest_dir):
-        return records
+        return list(index.values())
 
     for fname in sorted(os.listdir(latest_dir)):
         if not (fname.startswith("benchmark_") and fname.endswith(".txt")):
@@ -358,24 +438,32 @@ def _parse_benchmark_tables(latest_dir: str = "reports/latest") -> list[dict]:
                     parts = re.split(r"\s{2,}", line.strip())
                     if len(parts) >= 3:
                         try:
-                            records.append({
+                            rec = {
                                 "country": country,
                                 "model": parts[0],
                                 "mae": float(parts[1]),
                                 "rmse": float(parts[2]),
                                 **({"rmae": float(parts[3])} if len(parts) > 3 else {}),
                                 "source": f"reports/latest/{fname}",
-                            })
+                            }
+                            # Later files win: one row per (country, model).
+                            index[(country, parts[0])] = rec
                         except ValueError:
                             continue
-    return records
+    return list(index.values())
 
 
 @app.get("/metrics")
 def get_metrics():
     """Per-country benchmark metrics (MAE/RMSE/rMAE in EUR/MWh) from the
-    latest harness tables in reports/latest/."""
-    return {"metrics": _parse_benchmark_tables()}
+    latest harness tables in reports/latest/. Rows matching the model each
+    country actually serves are flagged ``served``; the UI shows only those."""
+    records = _parse_benchmark_tables()
+    for rec in records:
+        bundle = MODELS.get(rec.get("country", ""))
+        variant = bundle["config"].get("variant") if bundle else None
+        rec["served"] = bool(variant and rec.get("model") == f"TFT ({variant})")
+    return {"metrics": records}
 
 
 @app.get("/summary")
@@ -383,6 +471,7 @@ def price_summary(
     countries: str = Query(default=None,
                            description="Comma-separated country codes. Defaults to all loaded."),
     target_date: str | None = None,
+    model: str = Query(default="tft", description="tft (default), lr or lgbm."),
 ):
     """Price-level summary per country: mean/median/min/max forecast price and peak hour."""
     requested = parse_countries(countries) if countries else sorted(MODELS)
@@ -390,7 +479,7 @@ def price_summary(
     for c in requested:
         if c not in MODELS:
             continue
-        fc = _forecast_one(c, target_date)["forecast"]
+        fc = _forecast_one(c, target_date, _validate_model(model))["forecast"]
         prices = np.array([h["predicted_price_eur_mwh"] for h in fc], dtype=float)
         if prices.size == 0:
             continue
