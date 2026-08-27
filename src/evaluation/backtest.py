@@ -385,7 +385,7 @@ def run_benchmark(
         tft = TFTModel.load(load_tft, map_location="cuda" if torch.cuda.is_available() else "cpu")
         model_path = load_tft
         inv = sinh_inverse if target_transform == "asinh" else None
-        evaluate(f"TFT ({target_transform})", tft, y_tft, tft_scaler, cov_scaled, inverse_fn=inv)
+        evaluate(f"TFT ({label})", tft, y_tft, tft_scaler, cov_scaled, inverse_fn=inv)
     elif not skip_tft:
         print(
             f"[{country}] --- TFT (transform={target_transform}, "
@@ -439,7 +439,7 @@ def run_benchmark(
                     shutil.copy2(src, run_dir)
 
         inv = sinh_inverse if target_transform == "asinh" else None
-        evaluate(f"TFT ({target_transform})", tft, y_tft, tft_scaler, cov_scaled, inverse_fn=inv)
+        evaluate(f"TFT ({label})", tft, y_tft, tft_scaler, cov_scaled, inverse_fn=inv)
 
     # --- Probabilistic evaluation: pinball loss at q10/50/90 ---
     pinball_rows: dict[str, dict] = {}
