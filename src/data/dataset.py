@@ -1,9 +1,10 @@
 import os
+import pickle
 import sys
+
 import pandas as pd
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
-import pickle
 
 # Allow running as a script: make ``src`` importable from the project root.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -75,7 +76,7 @@ def load_and_prepare_data(
 
     print(
         f"[{country}] Data prepared. "
-        f"Train shape: {len(train_scaled)}, Val shape: {len(val_scaled)}, Test shape: {len(test_scaled)}"
+        f"Train: {len(train_scaled)}, Val: {len(val_scaled)}, Test: {len(test_scaled)}"
     )
 
     return {

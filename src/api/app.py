@@ -1,9 +1,11 @@
+import json
 import os
 import sys
+
 import gradio as gr
-import requests
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
+import requests
 
 # Allow running as a module: make ``src`` importable from the project root.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -92,7 +94,9 @@ def fetch_predictions(country, target_date="", show_ci=False):
     except Exception as e:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "Connection error", ha='center')
-        return fig, pd.DataFrame({"error": [f"Connection error: {e} - Is FastAPI backend running?"]})
+        return fig, pd.DataFrame(
+            {"error": [f"Connection error: {e} - Is FastAPI backend running?"]}
+        )
 
 
 def fetch_comparison(countries_csv, target_date=""):
@@ -161,7 +165,9 @@ def fetch_comparison(countries_csv, target_date=""):
     except Exception as e:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "Connection error", ha='center')
-        return fig, pd.DataFrame({"error": [f"Connection error: {e} - Is FastAPI backend running?"]})
+        return fig, pd.DataFrame(
+            {"error": [f"Connection error: {e} - Is FastAPI backend running?"]}
+        )
 
 
 def fetch_metrics():
@@ -203,15 +209,20 @@ def fetch_summary(countries_csv):
 
 
 try:
-    # Quick read of the last date from the CH dataset to show training bounds.
-    df_meta = pd.read_csv("data/processed/features_CH.csv", usecols=[0])
-    last_data_date = pd.to_datetime(df_meta.iloc[-1, 0])
-    # 14 days were held out for validation (7) and testing (7)
-    last_train_date = (last_data_date - pd.Timedelta(days=14)).strftime('%Y-%m-%d')
-    last_context_date = last_data_date.strftime('%Y-%m-%d')
+    # Serving bounds from the CH serving bundle (built by build_serving.py);
+    # fall back to the raw data end when no bundle exists yet.
+    with open("models/serving_CH/config.json") as _f:
+        _cfg = json.load(_f)
+    last_train_date = pd.to_datetime(_cfg["fit_through"]).strftime('%Y-%m-%d')
+    last_context_date = pd.to_datetime(_cfg["data_through"]).strftime('%Y-%m-%d')
 except Exception:
-    last_train_date = "Unknown"
-    last_context_date = "Unknown"
+    try:
+        df_meta = pd.read_csv("data/processed/features_CH.csv", usecols=[0])
+        last_train_date = "Unknown"
+        last_context_date = pd.to_datetime(df_meta.iloc[-1, 0]).strftime('%Y-%m-%d')
+    except Exception:
+        last_train_date = "Unknown"
+        last_context_date = "Unknown"
 
 # Create Gradio interface
 with gr.Blocks(title="Electricity Price Forecaster", theme=gr.themes.Soft()) as demo:

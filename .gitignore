@@ -21,11 +21,8 @@ venv/
 
 # Project specific
 data/raw/*
-!data/raw/.gitkeep
 data/interim/*
-!data/interim/.gitkeep
 data/processed/*
-!data/processed/.gitkeep
 mlruns/
 mlflow.db
 
@@ -47,3 +44,9 @@ reports/
 # Cache databases
 *.sqlite
 .cache.sqlite
+
+# Local agent session artifacts
+.zcode/
+
+# Stray PyTorch Lightning tensorboard output (test/predict runs)
+lightning_logs/

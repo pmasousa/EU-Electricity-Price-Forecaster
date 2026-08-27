@@ -1,16 +1,17 @@
 import os
 import sys
+from datetime import datetime, timedelta
+
 import numpy as np
 import openmeteo_requests
-import requests_cache
 import pandas as pd
+import requests_cache
 from retry_requests import retry
-from datetime import datetime, timedelta
 
 # Allow running as a script: make ``src`` importable from the project root.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from src.config import DEFAULT_COUNTRIES, get_country
+from src.config import get_country
 
 
 def download_weather_data(
@@ -22,7 +23,10 @@ def download_weather_data(
     writes ``weather_{country}.csv``. No API key required.
     """
     cfg = get_country(country)
-    print(f"Downloading Open-Meteo data for {cfg['name']} ({country}) from {start_date} to {end_date}...")
+    print(
+        f"Downloading Open-Meteo data for {cfg['name']} ({country})"
+        f" from {start_date} to {end_date}..."
+    )
 
     # Setup the Open-Meteo API client with cache and retry on error
     cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
@@ -78,7 +82,9 @@ def download_weather_data(
         generate_mock_weather_data(start_date, end_date, country, output_dir)
 
 
-def generate_mock_weather_data(start_date, end_date, country: str = "CH", output_dir: str = "data/raw"):
+def generate_mock_weather_data(
+    start_date, end_date, country: str = "CH", output_dir: str = "data/raw"
+):
     get_country(country)  # validate
     start = pd.to_datetime(start_date)
     end = pd.to_datetime(end_date)
@@ -98,6 +104,7 @@ def generate_mock_weather_data(start_date, end_date, country: str = "CH", output
 
 if __name__ == "__main__":
     import argparse
+
     from src.config import parse_countries
 
     parser = argparse.ArgumentParser(description="Download Open-Meteo weather data per country.")

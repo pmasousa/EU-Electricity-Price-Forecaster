@@ -1,12 +1,13 @@
 import os
 import sys
+
 import pandas as pd
 import requests
 
 # Allow running as a script: make ``src`` importable from the project root.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from src.config import COUNTRIES, DEFAULT_COUNTRIES, get_country
+from src.config import get_country
 
 # Energy-Charts aggregates EPEX SPOT / ENTSO-E transparency data. No API key.
 PRICE_URL = "https://api.energy-charts.info/price"
@@ -55,7 +56,9 @@ def download_entsoe_data(start_date, end_date, country: str = "CH", output_dir: 
     if response.status_code == 200:
         data = response.json()
         timestamps = pd.to_datetime(data['unix_seconds'], unit='s', utc=True)
-        load_data = next((pt['data'] for pt in data['production_types'] if pt['name'] == 'Load'), None)
+        load_data = next(
+            (pt['data'] for pt in data['production_types'] if pt['name'] == 'Load'), None
+        )
 
         if load_data is not None:
             load = pd.Series(load_data, index=timestamps, name='Actual Load')
@@ -87,7 +90,9 @@ def _to_hourly(series: pd.Series) -> pd.Series:
     return resampled.ffill()
 
 
-def generate_mock_entsoe_data(start_date, end_date, country: str = "CH", output_dir: str = "data/raw"):
+def generate_mock_entsoe_data(
+    start_date, end_date, country: str = "CH", output_dir: str = "data/raw"
+):
     cfg = get_country(country)
     print(f"Generating mock Energy-Charts data as fallback for {country}...")
     os.makedirs(output_dir, exist_ok=True)
@@ -116,6 +121,7 @@ def generate_mock_entsoe_data(start_date, end_date, country: str = "CH", output_
 
 if __name__ == "__main__":
     import argparse
+
     from src.config import parse_countries
 
     parser = argparse.ArgumentParser(description="Download Energy-Charts data per country.")

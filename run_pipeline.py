@@ -1,7 +1,7 @@
-import subprocess
 import argparse
-import sys
 import os
+import subprocess
+import sys
 
 # Allow running as a script from project root: make ``src`` importable.
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -46,15 +46,18 @@ if __name__ == "__main__":
     countries = parse_countries(args.countries)
     countries_arg = ",".join(countries)
 
-    # Download steps need --days; modeling steps need --epochs. Baselines don't
-    # take either (they train closed-form / LightGBM, not iterative NNs).
+    # Download steps need --days; the benchmark harness needs --epochs.
+    # The harness (src/evaluation/backtest.py) is the single source of truth for
+    # model comparison: shared splits, honest covariates, one walk-forward
+    # protocol for every model. build_serving then assembles models/serving_{CC}
+    # from the benchmarked artifacts so `api`/`ui` have something to load.
     scripts = [
         ("src/data/download_entsoe.py", ["--countries", countries_arg, "--days", str(args.days)]),
         ("src/data/download_weather.py", ["--countries", countries_arg, "--days", str(args.days)]),
         ("src/features/build_features.py", ["--countries", countries_arg]),
-        ("src/models/baseline.py", ["--countries", countries_arg]),
-        ("src/models/train_tft.py", ["--countries", countries_arg, "--epochs", str(args.epochs)]),
-        ("src/models/plot_comparison.py", ["--countries", countries_arg, "--epochs", str(args.epochs)]),
+        ("src/evaluation/backtest.py",
+         ["--countries", countries_arg, "--epochs", str(args.epochs)]),
+        ("src/models/build_serving.py", ["--country", countries_arg]),
     ]
 
     # Resolve --start-from into the script list.
@@ -74,4 +77,4 @@ if __name__ == "__main__":
     for script_path, extra in scripts:
         run_script(script_path, extra_args=extra)
 
-    print("Entire pipeline completed successfully! You can find reports and plots in the 'reports' directory.")
+    print("Pipeline complete. Reports and plots are in the 'reports' directory.")

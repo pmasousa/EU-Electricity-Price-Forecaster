@@ -51,6 +51,11 @@ COUNTRIES = {
 # Countries processed by default when running the full pipeline or API startup.
 DEFAULT_COUNTRIES = ["CH", "PT", "ES"]
 
+# Country served when /predict is called without an explicit country (used
+# only if that country's serving bundle is loaded; otherwise the first
+# loaded country wins).
+DEFAULT_COUNTRY = "PT"
+
 
 def get_country(code: str) -> dict:
     """Return the metadata dict for a country code, raising a clear error if unknown."""

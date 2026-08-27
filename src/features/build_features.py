@@ -1,12 +1,13 @@
 import os
 import sys
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 # Allow running as a script: make ``src`` importable from the project root.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from src.config import DEFAULT_COUNTRIES, get_country
+from src.config import get_country
 
 
 def create_cyclic_features(df, col_name, period):
@@ -56,7 +57,10 @@ def build_features(
     df = df.join(weather_df, how="inner")
 
     # Rename columns to ensure consistency
-    df.columns = ["price", "load", "temperature_2m", "relative_humidity_2m", "wind_speed_10m", "direct_radiation"]
+    df.columns = [
+        "price", "load", "temperature_2m", "relative_humidity_2m",
+        "wind_speed_10m", "direct_radiation",
+    ]
 
     # Missing values (interpolate or forward fill)
     df = df.interpolate(method='linear', limit_direction='both')
@@ -84,6 +88,7 @@ def build_features(
 
 if __name__ == "__main__":
     import argparse
+
     from src.config import parse_countries
 
     parser = argparse.ArgumentParser(description="Build per-country feature tables.")

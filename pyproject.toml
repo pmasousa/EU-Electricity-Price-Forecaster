@@ -8,7 +8,7 @@ dependencies = [
     "torch",
     "pandas",
     "numpy",
-    "darts[torch]==0.46.1",
+    "darts[torch]==0.45.0",
     "fastapi",
     "uvicorn[standard]",
     "python-dotenv",
@@ -23,17 +23,20 @@ dependencies = [
     "lightgbm"
 ]
 
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.0.0",
-    "ruff>=0.3.0",
-    "jupyter>=1.0.0",
-    "pyright>=1.1.411",
-]
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "N", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Script-style entry points set up sys.path before importing src.* — the
+# resulting E402 is structural, not a smell.
+"run_pipeline.py" = ["E402"]
+"src/data/dataset.py" = ["E402"]
+"src/data/download_entsoe.py" = ["E402"]
+"src/data/download_weather.py" = ["E402"]
+"src/features/build_features.py" = ["E402"]
+"src/evaluation/backtest.py" = ["E402"]
+"src/evaluation/reconcile_q50.py" = ["E402"]

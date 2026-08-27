@@ -1,25 +1,33 @@
+import json
 import os
-import sys
-import re
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
-import numpy as np
-import uvicorn
-import datetime
-import pandas as pd
 import pickle
+import re
+import sys
+from contextlib import asynccontextmanager
+
+import numpy as np
+import pandas as pd
+import torch
+import uvicorn
 from darts import TimeSeries
 from darts.models import TFTModel
 from darts.utils.likelihood_models.torch import QuantileRegression
-import torch
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pytorch_lightning.callbacks import Callback
-from contextlib import asynccontextmanager
 
 # Allow running as a module: make ``src`` importable from the project root.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from src.config import COUNTRIES, DEFAULT_COUNTRIES, get_country, parse_countries
+from src.config import (
+    COUNTRIES,
+    DEFAULT_COUNTRIES,
+    DEFAULT_COUNTRY,
+    get_country,
+    parse_countries,
+)
+from src.data.honest import COV_COLUMNS, future_covariate_rows, with_load_lags
+
 
 # Define dummy callback to allow pickle to load the model. Training scripts save
 # the TFT with a GlobalTimerCallback in their callbacks; on load, pickle looks
@@ -33,44 +41,58 @@ class GlobalTimerCallback(Callback):
 def _register_callback_for_unpickling():
     """Make GlobalTimerCallback findable by pickle/torch regardless of __main__."""
     import __main__
-    setattr(__main__, "GlobalTimerCallback", GlobalTimerCallback)
+    __main__.GlobalTimerCallback = GlobalTimerCallback
     if hasattr(torch.serialization, "add_safe_globals"):
         torch.serialization.add_safe_globals([QuantileRegression, GlobalTimerCallback])
 
 
 def _load_country_model(country: str):
-    """Load one country's TFT model + scalers. Returns None if missing or load fails.
+    """Load one country's serving bundle (built by src/models/build_serving.py).
 
-    A failed load is logged and treated as "not available" rather than crashing
-    startup, so the API can still serve other countries and the metadata-only
-    endpoints (``/``, ``/metrics``). This is important because model deserialization
-    is sensitive to the exact torch/pytorch-lightning versions present at runtime.
+    Returns None if missing or load-failed. A failed load is logged and treated
+    as "not available" rather than crashing startup, so the API can still serve
+    other countries and the metadata-only endpoints.
     """
-    model_path = f"models/tft_model_{country}.pt"
-    scaler_target_path = f"models/scaler_target_{country}.pkl"
-    scaler_future_path = f"models/scaler_future_{country}.pkl"
+    serving_dir = f"models/serving_{country}"
+    model_path = os.path.join(serving_dir, "tft_model.pt")
+    scaler_target_path = os.path.join(serving_dir, "scaler_target.pkl")
+    scaler_cov_path = os.path.join(serving_dir, "scaler_cov.pkl")
+    config_path = os.path.join(serving_dir, "config.json")
 
-    if not (os.path.exists(model_path) and os.path.exists(scaler_target_path)
-            and os.path.exists(scaler_future_path)):
+    if not all(os.path.exists(p) for p in
+               [model_path, scaler_target_path, scaler_cov_path, config_path]):
         return None
 
     try:
         _register_callback_for_unpickling()
-        model = TFTModel.load(model_path, map_location="cpu", weights_only=False)
+        # No weights_only kwarg: darts 0.45 forwards extra kwargs into PL's
+        # load_from_checkpoint where they collide with the module constructor.
+        model = TFTModel.load(model_path, map_location="cpu")
         if hasattr(model, 'trainer_params'):
             model.trainer_params['accelerator'] = 'cpu'
             model.trainer_params['devices'] = 1
+            # Drop the training-time CSVLogger: it points at the training
+            # machine's log folder, which a serving host doesn't have. darts
+            # rebuilds a throwaway logger for predict.
+            model.trainer_params.pop('logger', None)
 
         with open(scaler_target_path, "rb") as f:
             scaler_target = pickle.load(f)
-        with open(scaler_future_path, "rb") as f:
-            scaler_future = pickle.load(f)
+        with open(scaler_cov_path, "rb") as f:
+            scaler_cov = pickle.load(f)
+        with open(config_path) as f:
+            config = json.load(f)
 
-        return {"model": model, "scaler_target": scaler_target, "scaler_future": scaler_future}
+        return {
+            "model": model,
+            "scaler_target": scaler_target,
+            "scaler_cov": scaler_cov,
+            "config": config,
+        }
     except Exception as e:
-        print(f"Warning: failed to load model for {country} ({type(e).__name__}: {e}). "
-              f"Skipping — retrain with `python run_pipeline.py --countries {country}` "
-              f"against the installed library versions to use it.")
+        print(f"Warning: failed to load serving bundle for {country} "
+              f"({type(e).__name__}: {e}). Skipping — rebuild with "
+              f"`python src/models/build_serving.py --country {country}`.")
         return None
 
 
@@ -121,13 +143,7 @@ def read_root():
     }
 
 
-def create_cyclic_features(df, col_name, period):
-    df[f"{col_name}_sin"] = np.sin(2 * np.pi * df[col_name] / period)
-    df[f"{col_name}_cos"] = np.cos(2 * np.pi * df[col_name] / period)
-    return df
-
-
-def _forecast_one(country: str, target_date: Optional[str] = None) -> dict:
+def _forecast_one(country: str, target_date: str | None = None) -> dict:
     """Core single-country forecast. Returns a payload dict with quantile bands."""
     if country not in MODELS:
         raise HTTPException(
@@ -138,7 +154,7 @@ def _forecast_one(country: str, target_date: Optional[str] = None) -> dict:
     bundle = MODELS[country]
     model = bundle["model"]
     scaler_target = bundle["scaler_target"]
-    scaler_future = bundle["scaler_future"]
+    scaler_cov = bundle["scaler_cov"]
 
     try:
         # Load the latest data for this country
@@ -162,10 +178,17 @@ def _forecast_one(country: str, target_date: Optional[str] = None) -> dict:
             try:
                 target_start = pd.to_datetime(target_date).normalize()
             except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+                raise HTTPException(
+                    status_code=400, detail="Invalid date format. Use YYYY-MM-DD"
+                ) from None
 
-            if target_start <= df.index[0] + pd.Timedelta(hours=history_len):
-                raise HTTPException(status_code=400, detail="Date too early, not enough historical data.")
+            # The honest covariates lag load by 24h/168h, and the 168h history
+            # window must itself carry valid lags -> earliest target is
+            # data_start + 168h (lags) + 168h (history).
+            if target_start <= df.index[0] + pd.Timedelta(hours=history_len + 168):
+                raise HTTPException(
+                    status_code=400, detail="Date too early, not enough historical data."
+                ) from None
 
             history_end = target_start - pd.Timedelta(hours=1)
             df_history = df.loc[:history_end].iloc[-history_len:].copy()
@@ -180,54 +203,32 @@ def _forecast_one(country: str, target_date: Optional[str] = None) -> dict:
             df_history = df.iloc[-history_len:].copy()
             actual_prices = {}
 
-        # Create future 24 hours of covariates
+        # Covariates through the shared honest builder (src/data/honest.py) —
+        # identical construction to what the model was trained on: calendar +
+        # weather (actuals for retroactive dates, else the last-24h proxy) +
+        # load lagged 24h/168h (realized load at forecast time is not knowable).
         last_date = df_history.index[-1]
-        future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=forecast_len, freq='h')
-
-        df_future_24 = pd.DataFrame(index=future_dates)
+        future_index = pd.date_range(
+            start=last_date + pd.Timedelta(hours=1), periods=forecast_len, freq="h"
+        )
 
         if target_date and not df_actual.empty and len(df_actual) == forecast_len:
-            # Use actual weather + load if available for historical comparison
-            df_future_24['load'] = df_actual['load'].values
-            df_future_24['temperature_2m'] = df_actual['temperature_2m'].values
-            df_future_24['relative_humidity_2m'] = df_actual['relative_humidity_2m'].values
-            df_future_24['wind_speed_10m'] = df_actual['wind_speed_10m'].values
-            df_future_24['direct_radiation'] = df_actual['direct_radiation'].values
+            weather = df_actual[["temperature_2m", "relative_humidity_2m",
+                                 "wind_speed_10m", "direct_radiation"]]
         else:
-            # Naive forecast for weather + load (copy yesterday's values)
-            yesterday_covs = df_history.iloc[-forecast_len:][
-                ['load', 'temperature_2m', 'relative_humidity_2m', 'wind_speed_10m', 'direct_radiation']
-            ]
-            df_future_24['load'] = yesterday_covs['load'].values
-            df_future_24['temperature_2m'] = yesterday_covs['temperature_2m'].values
-            df_future_24['relative_humidity_2m'] = yesterday_covs['relative_humidity_2m'].values
-            df_future_24['wind_speed_10m'] = yesterday_covs['wind_speed_10m'].values
-            df_future_24['direct_radiation'] = yesterday_covs['direct_radiation'].values
+            weather = None
 
-        # Recompute calendar features for future dates
-        df_future_24['hour'] = df_future_24.index.hour
-        df_future_24['day_of_week'] = df_future_24.index.dayofweek
-        df_future_24['day_of_month'] = df_future_24.index.day
-        df_future_24['month'] = df_future_24.index.month
-        df_future_24['is_weekend'] = df_future_24['day_of_week'].isin([5, 6]).astype(int)
-
-        df_future_24 = create_cyclic_features(df_future_24, "hour", 24)
-        df_future_24 = create_cyclic_features(df_future_24, "day_of_week", 7)
-        df_future_24 = create_cyclic_features(df_future_24, "month", 12)
-
-        # Combine past and future for the TFT model (history + forecast horizon for future_covariates).
-        # Only 'price' is the target; all other columns (incl. load, weather, calendar)
-        # are future covariates the model expects at every timestep.
-        df_future_full = pd.concat([df_history.drop(columns=['price']), df_future_24])
+        honest_frame = with_load_lags(df)
+        cov_history = honest_frame.loc[df_history.index[0]:last_date, COV_COLUMNS]
+        cov_future = future_covariate_rows(df, future_index, weather=weather)
+        cov_full = pd.concat([cov_history, cov_future])
 
         series = TimeSeries.from_series(df_history['price'])
-
-        future_cols = [c for c in df_history.columns if c != 'price']
-        future_covs = TimeSeries.from_dataframe(df_future_full, value_cols=future_cols)
+        future_covs = TimeSeries.from_dataframe(cov_full, value_cols=COV_COLUMNS)
 
         # Scale
         series_scaled = scaler_target.transform(series)
-        future_scaled = scaler_future.transform(future_covs)
+        future_scaled = scaler_cov.transform(future_covs)
 
         # Predict 24 hours into the future using probabilistic sampling
         pred_scaled = model.predict(
@@ -240,10 +241,17 @@ def _forecast_one(country: str, target_date: Optional[str] = None) -> dict:
         # Inverse transform
         pred_real = scaler_target.inverse_transform(pred_scaled)
 
-        # Extract quantiles
+        # Extract quantiles (and fail loudly instead of serving NaNs)
         q10_vals = pred_real.quantile(0.1).values().flatten()
         q50_vals = pred_real.quantile(0.5).values().flatten()
         q90_vals = pred_real.quantile(0.9).values().flatten()
+        if not (np.isfinite(q10_vals).all() and np.isfinite(q50_vals).all()
+                and np.isfinite(q90_vals).all()):
+            raise HTTPException(
+                status_code=500,
+                detail=f"[{country}] non-finite forecast values — check the "
+                       f"covariate history for gaps.",
+            )
 
         # Format the response
         results = []
@@ -269,17 +277,21 @@ def _forecast_one(country: str, target_date: Optional[str] = None) -> dict:
         raise
     except Exception as e:
         print(f"Error during prediction for {country}: {e}")
-        raise HTTPException(status_code=500, detail=f"[{country}] {e}")
+        raise HTTPException(status_code=500, detail=f"[{country}] {e}") from e
 
 
 @app.get("/predict")
 def predict_next_day(
     country: str = Query(default=None, description="Country code, e.g. CH/PT/ES. "
                           "Defaults to the first loaded country."),
-    target_date: Optional[str] = None,
+    target_date: str | None = None,
 ):
     """Single-country 24h forecast (EUR/MWh) with 10/50/90 quantile bands."""
-    country = (country or (sorted(MODELS)[0] if MODELS else None))
+    country = (
+        country
+        or (DEFAULT_COUNTRY if DEFAULT_COUNTRY in MODELS else None)
+        or (sorted(MODELS)[0] if MODELS else None)
+    )
     if country is None:
         raise HTTPException(status_code=503, detail="No models loaded. Run the pipeline first.")
     country = country.upper()
@@ -296,7 +308,7 @@ def compare_countries(
     countries: str = Query(default=None,
                            description="Comma-separated country codes, e.g. CH,PT,ES. "
                                        "Defaults to all loaded countries."),
-    target_date: Optional[str] = None,
+    target_date: str | None = None,
 ):
     """Return 24h forecasts for multiple countries in one payload (for overlay plots).
 
@@ -317,80 +329,60 @@ def compare_countries(
     return {"forecasts": results, "skipped": skipped}
 
 
-def _parse_metrics_file(path: str = "reports/metrics.txt") -> list[dict]:
-    """Parse reports/metrics.txt into a list of per-country metric records.
+def _parse_benchmark_tables(latest_dir: str = "reports/latest") -> list[dict]:
+    """Parse reports/latest/benchmark_*.txt into per-country metric records.
 
-    The file is written as sections beginning with ``=== Country: <CODE> ===`` and
-    containing ``MAE:`` / ``RMSE:`` lines under model-name headers. We capture the
-    latest MAE/RMSE per (country, model) and label single-shot vs rolling.
+    Table rows are fixed-width (name, MAE, RMSE, rMAE); the parser splits on
+    2+ spaces so it survives format tweaks. Only the point-forecast table is
+    read — pinball/coverage sections are skipped.
     """
-    if not os.path.exists(path):
-        return []
+    records: list[dict] = []
+    if not os.path.isdir(latest_dir):
+        return records
 
-    with open(path) as f:
-        text = f.read()
-
-    records = []
-    current_country = None
-    current_model = None
-    # Track the last seen MAE/RMSE for each (country, model) — later lines win.
-    index: dict[tuple, dict] = {}
-    order: list[tuple] = []
-
-    # Detect old-format files (no country sections). In that case attribute rows
-    # to the first configured country so historical metrics aren't lost.
-    has_country_sections = "=== Country:" in text
-    fallback_country = DEFAULT_COUNTRIES[0]
-
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line:
+    for fname in sorted(os.listdir(latest_dir)):
+        if not (fname.startswith("benchmark_") and fname.endswith(".txt")):
             continue
-        m = re.match(r"===\s*Country:\s*([A-Z]{2})\s*===", line)
-        if m:
-            current_country = m.group(1)
-            continue
-        # Model header lines look like a name possibly followed by "(...)".
-        if line.startswith("MAE:") or line.startswith("RMSE:"):
-            country = current_country or (fallback_country if not has_country_sections else None)
-            key = (country, current_model)
-            if key not in index:
-                index[key] = {"country": country, "model": current_model,
-                              "mae": None, "rmse": None}
-                order.append(key)
-            if line.startswith("MAE:"):
-                try:
-                    index[key]["mae"] = float(line.split(":", 1)[1].strip())
-                except ValueError:
-                    pass
-            else:
-                try:
-                    index[key]["rmse"] = float(line.split(":", 1)[1].strip())
-                except ValueError:
-                    pass
-        else:
-            # Treat as a model header (e.g. "Linear Regression", "TFT Model (Rolling Day-Ahead)").
-            current_model = line
-
-    for key in order:
-        rec = index[key]
-        if rec["country"] and rec["model"]:
-            records.append(rec)
+        path = os.path.join(latest_dir, fname)
+        country = None
+        with open(path) as f:
+            for raw in f:
+                line = raw.rstrip("\n")
+                m = re.match(r"Benchmark ([A-Z]{2}) ", line)
+                if m:
+                    country = m.group(1)
+                    continue
+                if line.startswith("Pinball"):
+                    break  # point table ends here
+                if country and re.match(r"\S.*\s{2,}-?\d+\.\d{2}\s+-?\d+\.\d{2}", line):
+                    parts = re.split(r"\s{2,}", line.strip())
+                    if len(parts) >= 3:
+                        try:
+                            records.append({
+                                "country": country,
+                                "model": parts[0],
+                                "mae": float(parts[1]),
+                                "rmse": float(parts[2]),
+                                **({"rmae": float(parts[3])} if len(parts) > 3 else {}),
+                                "source": f"reports/latest/{fname}",
+                            })
+                        except ValueError:
+                            continue
     return records
 
 
 @app.get("/metrics")
 def get_metrics():
-    """Per-country model metrics (MAE/RMSE in EUR/MWh) parsed from reports/metrics.txt."""
-    records = _parse_metrics_file()
-    return {"metrics": records}
+    """Per-country benchmark metrics (MAE/RMSE/rMAE in EUR/MWh) from the
+    latest harness tables in reports/latest/."""
+    return {"metrics": _parse_benchmark_tables()}
 
 
 @app.get("/summary")
 def price_summary(
     countries: str = Query(default=None,
                            description="Comma-separated country codes. Defaults to all loaded."),
-    target_date: Optional[str] = None,
+    target_date: str | None = None,
 ):
     """Price-level summary per country: mean/median/min/max forecast price and peak hour."""
     requested = parse_countries(countries) if countries else sorted(MODELS)
