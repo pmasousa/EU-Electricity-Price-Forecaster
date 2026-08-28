@@ -331,56 +331,66 @@ with tab_backtest:
             "Day", days, default=days[-1],
             format_func=lambda d: pd.Timestamp(d).strftime("%a %d %b"),
         ) or days[-1]
-        with st.spinner(f"Scoring {day}…"):
-            bt_frames, bt_failed = fetch_frames(country, models, day)
-        warn_failures(bt_failed)
-        bt_frames = align_frames(bt_frames)
-        if bt_frames:
-            bt_models = [m for m in models if m in bt_frames]
-            bt_first = bt_frames[bt_models[0]]
-            fig3 = go.Figure()
-            if show_ci and "tft" in bt_frames:
-                add_band(fig3, bt_frames["tft"], color)
-            for m in bt_models:
-                style = ({"color": color, "width": 2.6, "dash": "solid"}
-                         if m == "tft" else MODEL_LINE[m])
-                fig3.add_trace(go.Scatter(
-                    x=bt_frames[m]["timestamp"],
-                    y=bt_frames[m]["predicted_price_eur_mwh"],
-                    mode="lines" if m != "tft" else "lines+markers",
-                    line=style, marker={"size": 5} if m == "tft" else None,
-                    name=MODEL_LABELS[m], hovertemplate=HOVER,
-                ))
-            add_actual(fig3, bt_first)
-            apply_layout(fig3)
-            st.plotly_chart(fig3, width="stretch")
+        bt_sel = st.multiselect(
+            "Models", list(MODEL_LABELS), default=list(MODEL_LABELS),
+            format_func=MODEL_LABELS.get, key="bt_models",
+        )
+        if not bt_sel:
+            st.info("Pick at least one model.")
+        else:
+            bt_show_ci = "tft" in bt_sel and st.checkbox(
+                "Show q10–q90 band (TFT)", value=True, key="bt_show_ci"
+            )
+            with st.spinner(f"Scoring {day}…"):
+                bt_frames, bt_failed = fetch_frames(country, bt_sel, day)
+            warn_failures(bt_failed)
+            bt_frames = align_frames(bt_frames)
+            if bt_frames:
+                bt_models = [m for m in bt_sel if m in bt_frames]
+                bt_first = bt_frames[bt_models[0]]
+                fig3 = go.Figure()
+                if bt_show_ci and "tft" in bt_frames:
+                    add_band(fig3, bt_frames["tft"], color)
+                for m in bt_models:
+                    style = ({"color": color, "width": 2.6, "dash": "solid"}
+                             if m == "tft" else MODEL_LINE[m])
+                    fig3.add_trace(go.Scatter(
+                        x=bt_frames[m]["timestamp"],
+                        y=bt_frames[m]["predicted_price_eur_mwh"],
+                        mode="lines" if m != "tft" else "lines+markers",
+                        line=style, marker={"size": 5} if m == "tft" else None,
+                        name=MODEL_LABELS[m], hovertemplate=HOVER,
+                    ))
+                add_actual(fig3, bt_first)
+                apply_layout(fig3)
+                st.plotly_chart(fig3, width="stretch")
 
-            rows = []
-            for m in bt_models:
-                d = bt_frames[m]
-                if "actual_price_eur_mwh" not in d.columns:
-                    continue
-                a = d.dropna(subset=["actual_price_eur_mwh"])
-                if a.empty:
-                    continue
-                err = a["predicted_price_eur_mwh"] - a["actual_price_eur_mwh"]
-                rows.append({
-                    "Model": MODEL_LABELS[m],
-                    "MAE (EUR/MWh)": err.abs().mean(),
-                    "RMSE (EUR/MWh)": (err ** 2).mean() ** 0.5,
-                    "Bias (EUR/MWh)": err.mean(),
-                    "Hours scored": len(a),
-                })
-            if rows:
-                metrics = (
-                    pd.DataFrame(rows).sort_values("MAE (EUR/MWh)")
-                    .round(2).reset_index(drop=True)
-                )
-                metrics.loc[0, "Model"] += "  🏆"
-                st.caption(f"Day-ahead error on {day} — lower is better:")
-                st.dataframe(metrics, width="stretch", hide_index=True)
-            else:
-                st.info("No actuals recorded for this day yet.")
+                rows = []
+                for m in bt_models:
+                    d = bt_frames[m]
+                    if "actual_price_eur_mwh" not in d.columns:
+                        continue
+                    a = d.dropna(subset=["actual_price_eur_mwh"])
+                    if a.empty:
+                        continue
+                    err = a["predicted_price_eur_mwh"] - a["actual_price_eur_mwh"]
+                    rows.append({
+                        "Model": MODEL_LABELS[m],
+                        "MAE (EUR/MWh)": err.abs().mean(),
+                        "RMSE (EUR/MWh)": (err ** 2).mean() ** 0.5,
+                        "Bias (EUR/MWh)": err.mean(),
+                        "Hours scored": len(a),
+                    })
+                if rows:
+                    metrics = (
+                        pd.DataFrame(rows).sort_values("MAE (EUR/MWh)")
+                        .round(2).reset_index(drop=True)
+                    )
+                    metrics.loc[0, "Model"] += "  🏆"
+                    st.caption(f"Day-ahead error on {day} — lower is better:")
+                    st.dataframe(metrics, width="stretch", hide_index=True)
+                else:
+                    st.info("No actuals recorded for this day yet.")
     else:
         st.info("No complete actual-price days available yet — run the pipeline.")
 
