@@ -77,30 +77,26 @@ DARK_CSS = """
 /* expanders + alerts */
 [data-testid="stExpander"], [data-testid="stExpanderDetails"] {
   background-color: #131c17 !important; border-color: #27352d !important;}
+[data-testid="stExpander"] summary {
+  background-color: #1a2620 !important; color: #e6edf3 !important;}
 [data-testid="stAlert"] {background-color: #16211c !important; color: #e6edf3 !important;}
-/* dataframes: glide grid palette is inline CSS vars -> override with !important */
-.stDataFrameGlideDataEditor {
-  --gdg-bg-cell: #131c17 !important;
-  --gdg-bg-cell-medium: #131c17 !important;
-  --gdg-bg-header: #1a2620 !important;
-  --gdg-bg-header-hovered: #223129 !important;
-  --gdg-bg-header-has-focus: #223129 !important;
-  --gdg-bg-group-header: #1a2620 !important;
-  --gdg-bg-group-header-hovered: #223129 !important;
-  --gdg-bg-bubble: #1d2a23 !important;
-  --gdg-bg-bubble-selected: #1d2a23 !important;
-  --gdg-bg-icon-header: rgba(230, 237, 243, 0.6) !important;
-  --gdg-text-dark: #e6edf3 !important;
-  --gdg-text-medium: rgba(230, 237, 243, 0.85) !important;
-  --gdg-text-light: rgba(230, 237, 243, 0.5) !important;
-  --gdg-text-header: rgba(230, 237, 243, 0.6) !important;
-  --gdg-text-header-selected: #ffffff !important;
-  --gdg-text-group-header: rgba(230, 237, 243, 0.6) !important;
-  --gdg-text-bubble: rgba(230, 237, 243, 0.6) !important;
-  --gdg-border-color: rgba(230, 237, 243, 0.12) !important;
-  --gdg-horizontal-border-color: rgba(230, 237, 243, 0.12) !important;}
+/* text input wrapper (the white box) + header buttons */
+[data-testid="stTextInputRootElement"] {
+  background-color: #16211c !important; border-color: #2c3a32 !important;}
+[data-testid="stDeploymentButton"], [data-testid="stMainMenu"] {
+  background-color: #16211c !important; color: #9fb3a8 !important;
+  border: 1px solid #2c3a32 !important;}
+/* tables: st.table renders real DOM cells (unlike st.dataframe's canvas
+   grid, whose theme comes from JS and cannot be reached by CSS at all) */
+.stApp table {border-collapse: collapse !important;}
+.stApp table th, .stApp table td {
+  background-color: #131c17 !important; color: #e6edf3 !important;
+  border-color: #27352d !important;}
+.stApp table thead th, .stApp table th[scope="row"] {
+  background-color: #1a2620 !important; color: #9fb3a8 !important;}
+.stApp table td {text-align: right !important;}
 /* polish */
-.stPlotlyChart, [data-testid="stDataFrame"] {border-radius: 8px;}
+.stPlotlyChart {border-radius: 8px;}
 ::-webkit-scrollbar {width: 10px; height: 10px;}
 ::-webkit-scrollbar-track {background: #0e1512;}
 ::-webkit-scrollbar-thumb {background: #27352d; border-radius: 5px;}
@@ -134,6 +130,15 @@ def to_frame(rows):
     d = pd.DataFrame(rows)
     if not d.empty:
         d["timestamp"] = pd.to_datetime(d["timestamp"])
+    return d
+
+
+def fmt_table(df):
+    """Render floats at 2dp (st.table otherwise pads to 132.3300)."""
+    d = df.copy()
+    for col in d.columns:
+        if pd.api.types.is_float_dtype(d[col]):
+            d[col] = d[col].map(lambda v: f"{v:.2f}")
     return d
 
 
@@ -241,9 +246,11 @@ def add_band(fig, d, color, label=""):
     if {"q10", "q90"} <= set(d.columns):
         fill = (f"rgba({int(color[1:3], 16)},{int(color[3:5], 16)},"
                 f"{int(color[5:7], 16)},0.16)")
+        # the q90 trace exists only to close the fill — keep it out of the
+        # legend so the band shows a single entry (dupes were colliding)
         fig.add_trace(go.Scatter(
             x=d["timestamp"], y=d["q90"], mode="lines",
-            line={"width": 0}, hoverinfo="skip", name=f"q90 {label}".strip(),
+            line={"width": 0}, hoverinfo="skip", showlegend=False,
         ))
         fig.add_trace(go.Scatter(
             x=d["timestamp"], y=d["q10"], mode="lines", line={"width": 0},
@@ -317,7 +324,7 @@ for q in ("q10", "q90"):
 if "actual_price_eur_mwh" in first.columns:
     display["Actual (EUR/MWh)"] = first["actual_price_eur_mwh"].round(2).tolist()
 with st.expander("Hourly forecast table", expanded=False):
-    st.dataframe(display, width="stretch", height=320)
+    st.table(fmt_table(display).set_index("Time"))
 
 # ---------------- compare + backtest + benchmark tabs ----------------
 tab_compare, tab_backtest, tab_bench = st.tabs(
@@ -375,7 +382,7 @@ with tab_compare:
                 st.plotly_chart(fig2, width="stretch")
                 if table is not None:
                     with st.expander("Hourly comparison table", expanded=False):
-                        st.dataframe(table, width="stretch", height=300)
+                        st.table(fmt_table(table).set_index("Time"))
 
 with tab_backtest:
     st.caption(
@@ -450,7 +457,7 @@ with tab_backtest:
                     )
                     metrics.loc[0, "Model"] += "  🏆"
                     st.caption(f"Day-ahead error on {day} — lower is better:")
-                    st.dataframe(metrics, width="stretch", hide_index=True)
+                    st.table(fmt_table(metrics).set_index("Model"))
                 else:
                     st.info("No actuals recorded for this day yet.")
     else:
@@ -472,7 +479,10 @@ with tab_bench:
         keep = [c for c in ("Country", "Model", "MAE (EUR/MWh)",
                             "RMSE (EUR/MWh)", "rmae", "Served") if c in b.columns]
         b = b[keep].sort_values(["Country", "Served"], ascending=[True, False])
+        for col in ("MAE (EUR/MWh)", "RMSE (EUR/MWh)", "rmae"):
+            if col in b.columns:
+                b[col] = pd.to_numeric(b[col], errors="coerce").round(2)
         st.caption("Walk-forward benchmark (8-week holdout, EUR/MWh) — ✓ marks the served model.")
-        st.dataframe(b, width="stretch", height=420)
+        st.table(fmt_table(b).set_index("Model"))
     else:
         st.info("No benchmark tables found — run the pipeline first.")
