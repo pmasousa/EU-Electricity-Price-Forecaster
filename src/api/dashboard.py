@@ -41,9 +41,66 @@ HOVER = "%{x|%a %H:%M} — %{y:.1f} EUR/MWh<extra></extra>"
 
 DARK_CSS = """
 <style>
-.stApp, [data-testid="stSidebar"] {background: #0e1512 !important; color: #e6edf3 !important;}
+/* base surfaces */
+.stApp, [data-testid="stSidebar"], [data-testid="stHeader"] {
+  background: #0e1512 !important; color: #e6edf3 !important;}
 [data-testid="stSidebar"] {border-color: #27352d !important;}
+.stApp p, .stApp span, .stApp label, .stApp h1, .stApp h2, .stApp h3,
+.stApp summary, .stApp td, .stApp th {color: #e6edf3 !important;}
+[data-testid="stCaptionContainer"] {color: #9fb3a8 !important;}
+/* input + dropdown controls */
+[data-testid="stMultiSelect"] .react-aria-ComboBox > div,
+[data-testid="stSelectbox"] .react-aria-ComboBox > div,
+[data-testid="stTextInput"] input {
+  background-color: #16211c !important; color: #e6edf3 !important;
+  border-color: #2c3a32 !important;}
+[data-testid="stMultiSelect"] input {color: #e6edf3 !important;}
+[data-testid="stMultiSelectTagsContainer"] > div {
+  background-color: #1d2a23 !important; color: #cfe5d8 !important;
+  border-color: #2c3a32 !important;}
+[data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
+  background-color: #16211c !important; color: #e6edf3 !important;}
+[role="option"] {color: #e6edf3 !important;}
+[role="option"]:hover {background-color: #1f2e26 !important;}
+/* segmented control (day picker) */
+.stButtonGroup button {
+  background-color: #16211c !important; color: #9fb3a8 !important;
+  border-color: #2c3a32 !important;}
+.stButtonGroup button[data-selected="true"],
+.stButtonGroup button[aria-pressed="true"] {color: #2e9e5b !important;}
+/* tabs */
+[data-testid="stTabs"] [role="tab"] {color: #9fb3a8 !important;}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {color: #e6edf3 !important;}
+/* expanders + alerts */
+[data-testid="stExpander"], [data-testid="stExpanderDetails"] {
+  background-color: #131c17 !important; border-color: #27352d !important;}
+[data-testid="stAlert"] {background-color: #16211c !important; color: #e6edf3 !important;}
+/* dataframes: glide grid palette is inline CSS vars -> override with !important */
+.stDataFrameGlideDataEditor {
+  --gdg-bg-cell: #131c17 !important;
+  --gdg-bg-cell-medium: #131c17 !important;
+  --gdg-bg-header: #1a2620 !important;
+  --gdg-bg-header-hovered: #223129 !important;
+  --gdg-bg-header-has-focus: #223129 !important;
+  --gdg-bg-group-header: #1a2620 !important;
+  --gdg-bg-group-header-hovered: #223129 !important;
+  --gdg-bg-bubble: #1d2a23 !important;
+  --gdg-bg-bubble-selected: #1d2a23 !important;
+  --gdg-bg-icon-header: rgba(230, 237, 243, 0.6) !important;
+  --gdg-text-dark: #e6edf3 !important;
+  --gdg-text-medium: rgba(230, 237, 243, 0.85) !important;
+  --gdg-text-light: rgba(230, 237, 243, 0.5) !important;
+  --gdg-text-header: rgba(230, 237, 243, 0.6) !important;
+  --gdg-text-header-selected: #ffffff !important;
+  --gdg-text-group-header: rgba(230, 237, 243, 0.6) !important;
+  --gdg-text-bubble: rgba(230, 237, 243, 0.6) !important;
+  --gdg-border-color: rgba(230, 237, 243, 0.12) !important;
+  --gdg-horizontal-border-color: rgba(230, 237, 243, 0.12) !important;}
+/* polish */
 .stPlotlyChart, [data-testid="stDataFrame"] {border-radius: 8px;}
+::-webkit-scrollbar {width: 10px; height: 10px;}
+::-webkit-scrollbar-track {background: #0e1512;}
+::-webkit-scrollbar-thumb {background: #27352d; border-radius: 5px;}
 </style>
 """
 
@@ -256,7 +313,8 @@ for q in ("q10", "q90"):
         display[f"TFT {q}"] = first[q].round(2).tolist()
 if "actual_price_eur_mwh" in first.columns:
     display["Actual (EUR/MWh)"] = first["actual_price_eur_mwh"].round(2).tolist()
-st.dataframe(display, width="stretch", height=320)
+with st.expander("Hourly forecast table", expanded=False):
+    st.dataframe(display, width="stretch", height=320)
 
 # ---------------- compare + backtest + benchmark tabs ----------------
 tab_compare, tab_backtest, tab_bench = st.tabs(
@@ -313,7 +371,8 @@ with tab_compare:
                 apply_layout(fig2, height=420)
                 st.plotly_chart(fig2, width="stretch")
                 if table is not None:
-                    st.dataframe(table, width="stretch", height=300)
+                    with st.expander("Hourly comparison table", expanded=False):
+                        st.dataframe(table, width="stretch", height=300)
 
 with tab_backtest:
     st.caption(
