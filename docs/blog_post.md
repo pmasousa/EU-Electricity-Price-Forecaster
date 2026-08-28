@@ -73,6 +73,9 @@ a 186-feature autoregression is the LEAR-family benchmark this literature has
 used for years, and it's hard to beat on calendar + weather + lagged load.
 The TFT takes the probabilistic score on CH (pinball 6.49 vs 6.96) and loses
 it on the Iberian markets. LightGBM drops below persistence on ES.
+(Absolute MAE for the rMAE winners: PT 18.00, ES 17.36, CH 16.69 EUR/MWh —
+the table is relative because raw MAE isn't comparable across markets with
+different price levels.)
 
 The most useful number in the repo is the ugly one: both model families let
 31–50% of actual hours breach their q90 band, against a 10% calibration
@@ -92,4 +95,8 @@ day-ahead load forecasts — with evidence instead of a hunch.
    post-hoc archaeology isn't.
 
 Repo: [EU-Electricity-Price-Forecaster](https://github.com/pmasousa/EU-Electricity-Price-Forecaster) —
-CI, tests, the harness and every table referenced above are in it.
+CI, tests, the harness and every table referenced above are in it. The served
+stack: per-country models behind a FastAPI API (`?model=tft|lr|lgbm`), a
+Streamlit dashboard with forecast overlays, a three-country comparison, a
+backtest view of recent out-of-sample days, and the walk-forward benchmark
+table — all runnable under docker compose.
