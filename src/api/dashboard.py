@@ -54,7 +54,10 @@ DARK_CSS = """
 [data-testid="stTextInput"] input {
   background-color: #16211c !important; color: #e6edf3 !important;
   border-color: #2c3a32 !important;}
-[data-testid="stMultiSelect"] input {color: #e6edf3 !important;}
+[data-testid="stMultiSelect"] input,
+[data-testid="stSelectbox"] input {color: #e6edf3 !important;}
+[data-testid="stSelectbox"] input {background-color: transparent !important;}
+.stApp input::placeholder {color: #9fb3a8 !important;}
 [data-testid="stMultiSelectTagsContainer"] > div {
   background-color: #1d2a23 !important; color: #cfe5d8 !important;
   border-color: #2c3a32 !important;}
