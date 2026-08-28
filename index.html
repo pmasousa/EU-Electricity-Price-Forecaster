@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>⚡ EU Electricity Price Forecaster — demo</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --primary: #2e9e5b;
+    --bg: #ffffff;
+    --surface: #f3f8f4;
+    --border: #d9e5dd;
+    --text: #222426;
+    --muted: #5f6b64;
+    --cell: #ffffff;
+    --cell-head: #f0f6f2;
+  }
+  body.dark {
+    --bg: #0e1512;
+    --surface: #16211c;
+    --border: #27352d;
+    --text: #e6edf3;
+    --muted: #9fb3a8;
+    --cell: #131c17;
+    --cell-head: #1a2620;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Source Sans Pro", "Segoe UI", system-ui, sans-serif;
+  }
+  .layout { display: flex; min-height: 100vh; }
+  .side {
+    width: 270px; flex: 0 0 270px; background: var(--surface);
+    border-right: 1px solid var(--border); padding: 18px 16px;
+  }
+  .main { flex: 1; padding: 20px 26px; max-width: 1100px; }
+  h1 { font-size: 1.35rem; margin: 4px 0 2px; }
+  .badge {
+    display: inline-block; font-size: .72rem; padding: 2px 9px; border-radius: 999px;
+    border: 1px solid var(--primary); color: var(--primary); margin-bottom: 10px;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .caption { color: var(--muted); font-size: .88rem; margin: 2px 0 14px; }
+  .widget { margin-bottom: 16px; }
+  .widget label.head { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 5px; }
+  select, .btn {
+    width: 100%; padding: 8px 10px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; font-size: .95rem; cursor: pointer;
+  }
+  .checks label { display: flex; gap: 8px; align-items: center; padding: 4px 0; cursor: pointer; }
+  .checks input, .switch input { accent-color: var(--primary); width: 16px; height: 16px; }
+  .switch { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin: 14px 0 16px; }
+  .tab {
+    padding: 8px 16px; cursor: pointer; color: var(--muted); font-size: .95rem;
+    border-bottom: 2px solid transparent; margin-bottom: -2px; user-select: none;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+  .days { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 14px; }
+  .day {
+    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); cursor: pointer; font-size: .88rem;
+  }
+  .day.active { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+  .peak { font-size: .95rem; margin: 4px 0 10px; }
+  .peak b { color: var(--primary); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; margin-top: 10px; }
+  th, td { padding: 6px 10px; border: 1px solid var(--border); text-align: right; }
+  th { background: var(--cell-head); color: var(--muted); font-weight: 600; }
+  td { background: var(--cell); }
+  th:first-child, td:first-child { text-align: left; }
+  .foot { color: var(--muted); font-size: .8rem; margin-top: 26px; line-height: 1.5; }
+  .foot a { color: var(--primary); }
+  @media (max-width: 800px) {
+    .layout { flex-direction: column; }
+    .side { width: auto; flex: none; border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="side">
+    <span class="badge">Static demo</span>
+    <div class="widget">
+      <label class="head">Country</label>
+      <select id="country">
+        <option value="PT">PT — Portugal</option>
+        <option value="ES">ES — Spain</option>
+        <option value="CH">CH — Switzerland</option>
+      </select>
+    </div>
+    <div class="widget checks">
+      <label class="head">Models (click the legend to toggle lines)</label>
+      <label><input type="checkbox" id="m-tft" checked> TFT — quantile bands</label>
+      <label><input type="checkbox" id="m-lr"> Linear Regression</label>
+      <label><input type="checkbox" id="m-lgbm"> LightGBM</label>
+    </div>
+    <div class="widget checks">
+      <label class="switch"><input type="checkbox" id="band" checked> Show q10–q90 band (TFT)</label>
+    </div>
+    <div class="widget checks">
+      <label class="switch"><input type="checkbox" id="dark"> 🌙 Dark mode</label>
+    </div>
+  </div>
+  <div class="main">
+    <h1>⚡ EU Electricity Price Forecaster</h1>
+    <div class="caption" id="subtitle"></div>
+    <div class="tabs">
+      <div class="tab active" data-tab="forecast">Forecast</div>
+      <div class="tab" data-tab="backtest">Backtest days</div>
+      <div class="tab" data-tab="benchmark">Benchmark</div>
+    </div>
+    <div id="view-forecast">
+      <div class="peak" id="peak"></div>
+      <div id="plot-forecast"></div>
+    </div>
+    <div id="view-backtest" style="display:none">
+      <div class="caption">Forecast vs. actual on the five days frozen in this demo — every model was trained before these dates (out-of-sample).</div>
+      <div class="days" id="days"></div>
+      <div id="plot-backtest"></div>
+      <div class="caption" id="err-caption" style="margin-top:14px"></div>
+      <table id="err-table"></table>
+    </div>
+    <div id="view-benchmark" style="display:none">
+      <div class="caption">Walk-forward benchmark (8-week holdout, EUR/MWh) — ✓ marks the served model.</div>
+      <table id="bench-table"></table>
+    </div>
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+
+<script>
+const COLORS = {PT: "#d62728", ES: "#1f77b4", CH: "#2ca02c"};
+const LINES = {
+  lr:   {color: "#e67e22", dash: "dash", width: 2.1},
+  lgbm: {color: "#8e44ad", dash: "dot",  width: 2.1},
+};
+const LABELS = {tft: "TFT — quantile bands", lr: "Linear Regression", lgbm: "LightGBM"};
+const NAMES = {PT: "Portugal", ES: "Spain", CH: "Switzerland"};
+let DATA = null;
+let activeTab = "forecast";
+let activeDay = null;
+
+const $ = id => document.getElementById(id);
+const country = () => $("country").value;
+const models = () => ["tft", "lr", "lgbm"].filter(m => $("m-" + m).checked);
+const dark = () => document.body.classList.contains("dark");
+const layoutExtra = () => ({
+  paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+  font: {color: dark() ? "#e6edf3" : "#222426"},
+  margin: {l: 50, r: 20, t: 10, b: 40}, height: 420,
+  yaxis: {title: "EUR / MWh", gridcolor: dark() ? "#27352d" : "#e5ece8"},
+  xaxis: {gridcolor: dark() ? "#27352d" : "#e5ece8", tickformat: "%H:%M"},
+  legend: {orientation: "h", y: 1.08},
+  hovermode: "x unified",
+});
+const HOVER = "%{y:.1f} EUR/MWh";
+
+function bandTraces(rows, color, key) {
+  const q10 = rows.map(r => r.q10), q90 = rows.map(r => r.q90);
+  if (q10.some(v => v == null)) return [];
+  const rgb = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16)).join(",");
+  return [
+    {x: rows.map(r => r.timestamp), y: q90, mode: "lines",
+     line: {width: 0}, hoverinfo: "skip", showlegend: false},
+    {x: rows.map(r => r.timestamp), y: q10, mode: "lines", line: {width: 0},
+     fill: "tonexty", fillcolor: `rgba(${rgb},0.16)`, hoverinfo: "skip",
+     name: "q10–q90 band" + (key ? " " + key : "")},
+  ];
+}
+
+function modelTrace(rows, m, color) {
+  const style = m === "tft"
+    ? {color, width: 2.6, dash: "solid"} : LINES[m];
+  return {
+    x: rows.map(r => r.timestamp), y: rows.map(r => r.predicted_price_eur_mwh),
+    mode: "lines" + (m === "tft" ? "+markers" : ""), line: style,
+    marker: m === "tft" ? {size: 5} : undefined,
+    name: LABELS[m], hovertemplate: HOVER,
+  };
+}
+
+function renderForecast() {
+  const c = country(), ms = models();
+  const entry = DATA.countries[c];
+  const tftRows = entry.forecast.tft;
+  const rows = entry.forecast[ms.includes("tft") ? "tft" : ms[0]];
+  const prices = rows.map(r => r.predicted_price_eur_mwh);
+  const peak = prices.indexOf(Math.max(...prices));
+  $("subtitle").textContent = `Day-ahead electricity prices · ${NAMES[c]} · ` +
+    (ms.length ? ms.map(m => LABELS[m]).join(" · ") : "");
+  if (!ms.length) { $("peak").textContent = "Pick at least one model."; return; }
+  const d = new Date(rows[peak].timestamp);
+  $("peak").innerHTML =
+    `<b>Peak ${Math.max(...prices).toFixed(1)} EUR/MWh</b> at ` +
+    `${String(d.getHours()).padStart(2, "0")}:00 (${LABELS[ms[0]]}) · ` +
+    `min ${Math.min(...prices).toFixed(1)} · mean ${(prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(1)}`;
+  const traces = [];
+  if (ms.includes("tft") && $("band").checked)
+    traces.push(...bandTraces(tftRows, COLORS[c]));
+  for (const m of ms) traces.push(modelTrace(entry.forecast[m], m, COLORS[c]));
+  Plotly.react("plot-forecast", traces, layoutExtra(), {responsive: true});
+}
+
+function renderBacktest() {
+  const c = country(), ms = models(), entry = DATA.countries[c];
+  const days = Object.keys(entry.backtest);
+  if (!activeDay || !days.includes(activeDay)) activeDay = days[days.length - 1];
+  $("days").innerHTML = days.map(d => {
+    const dt = new Date(d + "T12:00:00");
+    const label = dt.toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"});
+    return `<div class="day${d === activeDay ? " active" : ""}" data-day="${d}">${label}</div>`;
+  }).join("");
+  document.querySelectorAll(".day").forEach(el =>
+    el.onclick = () => { activeDay = el.dataset.day; renderBacktest(); });
+  if (!ms.length) { Plotly.purge("plot-backtest"); return; }
+  const day = entry.backtest[activeDay];
+  const tftRows = day.tft;
+  const traces = [];
+  if (ms.includes("tft") && $("band").checked)
+    traces.push(...bandTraces(tftRows, COLORS[c]));
+  for (const m of ms) traces.push(modelTrace(day[m], m, COLORS[c]));
+  const actual = day[ms[0]].filter(r => r.actual_price_eur_mwh != null);
+  if (actual.length)
+    traces.push({
+      x: actual.map(r => r.timestamp), y: actual.map(r => r.actual_price_eur_mwh),
+      mode: "lines", line: {color: "black", dash: "dash", width: 1.8},
+      name: "actual", hovertemplate: HOVER,
+    });
+  Plotly.react("plot-backtest", traces, layoutExtra(), {responsive: true});
+
+  const rowsOut = [];
+  for (const m of ms) {
+    const a = day[m].filter(r => r.actual_price_eur_mwh != null);
+    if (!a.length) continue;
+    const err = a.map(r => r.predicted_price_eur_mwh - r.actual_price_eur_mwh);
+    rowsOut.push({
+      Model: LABELS[m],
+      MAE: err.reduce((s, e) => s + Math.abs(e), 0) / err.length,
+      RMSE: Math.sqrt(err.reduce((s, e) => s + e * e, 0) / err.length),
+      Bias: err.reduce((s, e) => s + e, 0) / err.length,
+    });
+  }
+  rowsOut.sort((a, b) => a.MAE - b.MAE);
+  $("err-caption").textContent = `Day-ahead error on ${activeDay} — lower is better:`;
+  $("err-table").innerHTML =
+    "<tr><th>Model</th><th>MAE (EUR/MWh)</th><th>RMSE (EUR/MWh)</th><th>Bias (EUR/MWh)</th></tr>" +
+    rowsOut.map((r, i) =>
+      `<tr><td>${r.Model}${i === 0 ? "  🏆" : ""}</td><td>${r.MAE.toFixed(2)}</td>` +
+      `<td>${r.RMSE.toFixed(2)}</td><td>${r.Bias.toFixed(2)}</td></tr>`).join("");
+}
+
+function renderBenchmark() {
+  const cols = ["Country", "Model", "MAE (EUR/MWh)", "RMSE (EUR/MWh)", "rMAE", "Served"];
+  const rows = DATA.metrics.map(r => [
+    r.country, r.model, r.mae.toFixed(2), r.rmse.toFixed(2),
+    r.rmae != null ? r.rmae.toFixed(2) : "—", r.served ? "✓" : "",
+  ]);
+  $("bench-table").innerHTML =
+    "<tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>" +
+    rows.map(r => "<tr>" + r.map(v => `<td>${v}</td>`).join("") + "</tr>").join("");
+}
+
+function render() {
+  if (activeTab === "forecast") renderForecast();
+  else if (activeTab === "backtest") renderBacktest();
+  else renderBenchmark();
+}
+
+function rerenderAll() {
+  for (const v of ["forecast", "backtest", "benchmark"])
+    $("view-" + v).style.display = v === activeTab ? "" : "none";
+  document.querySelectorAll(".tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.tab === activeTab));
+  render();
+}
+
+fetch("demo_data.json").then(r => r.json()).then(d => {
+  DATA = d;
+  $("foot").innerHTML =
+    `${d.source}<br>Snapshot frozen ${d.generated_at}. ` +
+    `Source: <a href="https://github.com/pmasousa/EU-Electricity-Price-Forecaster">EU-Electricity-Price-Forecaster</a>.`;
+  rerenderAll();
+});
+
+document.querySelectorAll(".tab").forEach(t =>
+  t.onclick = () => { activeTab = t.dataset.tab; rerenderAll(); });
+for (const id of ["country", "m-tft", "m-lr", "m-lgbm", "band"])
+  $(id).addEventListener("change", render);
+$("dark").addEventListener("change", () => {
+  document.body.classList.toggle("dark", $("dark").checked);
+  render();
+});
+</script>
+</body>
+</html>
