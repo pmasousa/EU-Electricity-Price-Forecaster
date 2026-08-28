@@ -33,7 +33,7 @@ Supported out of the box (config-driven — add more in `src/config.py`):
 - **Deep sequence modeling:** Temporal Fusion Transformer via `darts` + PyTorch, with quantile outputs (10/50/90).
 - **Walk-forward backtesting:** One shared harness (`src/evaluation/backtest.py`) scores every model — naive persistence, Linear Regression, LightGBM, TFT — on identical splits, covariates, and a day-ahead protocol, with MAE/RMSE/rMAE plus pinball loss and coverage for the quantile bands.
 - **FastAPI backend:** REST endpoints for single-country forecasts, cross-country comparison, per-country metrics, and price summaries.
-- **Interactive dashboard (Streamlit + Plotly):** forecasts auto-load on open; country + model selection (TFT bands, Linear Regression, LightGBM); hover/zoom charts with click-to-toggle legend; dark mode; three-country comparison and the walk-forward benchmark table.
+- **Interactive dashboard (Streamlit + Plotly):** forecasts auto-load on open; country + model selection (TFT bands, Linear Regression, LightGBM); hover/zoom charts with click-to-toggle legend; dark mode; three-country comparison on the shared forecast window; a backtest view of the last 5 complete days (every served model was trained before them — forecast vs. actual with per-model day errors); and the walk-forward benchmark table.
 
 ## 📊 Benchmark — day-ahead walk-forward
 
@@ -194,6 +194,7 @@ All prices are in **EUR/MWh**. The API loads every country model that has artifa
 | `GET /predict?country=PT&model=tft&target_date=YYYY-MM-DD` | 24h forecast for one country. `model`: `tft` (default; q10/50/90 bands), `lr`, `lgbm` (point forecasts). `target_date` optional (retroactive). |
 | `GET /compare?countries=PT,ES,CH&model=tft` | Forecasts for multiple countries in one payload, for overlay plots. Accepts `model` like `/predict`; countries without a loaded model are reported in `skipped`. |
 | `GET /metrics` | Per-country benchmark metrics (MAE/RMSE/rMAE) parsed from `reports/latest/benchmark_*.txt`, with the served model flagged. |
+| `GET /days?country=PT&n=5` | Last n dates with a complete 24h actual-price curve — recent out-of-sample days for backtest views. |
 | `GET /summary?countries=PT,ES,CH` | Price-level summary per country: mean/median/min/max forecast price and peak hour. |
 
 Response field names (note the EUR currency):

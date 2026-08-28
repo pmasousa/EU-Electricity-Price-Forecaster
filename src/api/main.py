@@ -453,6 +453,41 @@ def _parse_benchmark_tables(latest_dir: str = "reports/latest") -> list[dict]:
     return list(index.values())
 
 
+@app.get("/days")
+def recent_backtest_days(
+    country: str = Query(default=None,
+                         description="Country code, e.g. PT. Defaults to the first loaded."),
+    n: int = Query(default=5, description="How many recent days to return."),
+):
+    """Last n dates with a complete 24h actual-price curve, for backtest views.
+
+    The served models were trained before these dates (the walk-forward holdout
+    sits inside the training cutoff), so forecasting any of them is an honest
+    out-of-sample check: predicted vs actual, no leakage.
+    """
+    country = (
+        country
+        or (DEFAULT_COUNTRY if DEFAULT_COUNTRY in MODELS else None)
+        or (sorted(MODELS)[0] if MODELS else None)
+    )
+    if country is None:
+        raise HTTPException(status_code=503, detail="No models loaded. Run the pipeline first.")
+    country = country.upper()
+    if country not in COUNTRIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown country '{country}'. Available: {sorted(COUNTRIES)}",
+        )
+    try:
+        df = read_features(country)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    price = df["price"].dropna()
+    counts = price.groupby(price.index.date).count()
+    days = [d.isoformat() for d, c in counts.items() if c == 24]
+    return {"country": country, "days": days[-max(1, n):]}
+
+
 @app.get("/metrics")
 def get_metrics():
     """Per-country benchmark metrics (MAE/RMSE/rMAE in EUR/MWh) from the

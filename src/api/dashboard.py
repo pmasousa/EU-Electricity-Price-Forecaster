@@ -3,7 +3,8 @@
 Reactive by construction: every widget change reruns this script, so forecasts
 load on open and update immediately — no buttons, no event wiring. Serves the
 TFT (quantile bands) plus the benchmarked Linear Regression and LightGBM
-refits via the API's ``model`` parameter.
+refits via the API's ``model`` parameter, overlays countries on the time
+window they share, and scores the served models on recent out-of-sample days.
 
 Run: streamlit run src/api/dashboard.py   (API on API_URL, default :8000)
 """
@@ -36,6 +37,8 @@ MODEL_LINE = {
     "lgbm": {"color": "#8e44ad", "dash": "dot", "width": 2.1},
 }
 
+HOVER = "%{x|%a %H:%M} — %{y:.1f} EUR/MWh<extra></extra>"
+
 DARK_CSS = """
 <style>
 .stApp, [data-testid="stSidebar"] {background: #0e1512 !important; color: #e6edf3 !important;}
@@ -65,6 +68,66 @@ def fetch_comparison(codes, model):
 
 def fetch_metrics():
     return _get("/metrics", {}).get("metrics", [])
+
+
+def to_frame(rows):
+    d = pd.DataFrame(rows)
+    if not d.empty:
+        d["timestamp"] = pd.to_datetime(d["timestamp"])
+    return d
+
+
+def fetch_frames(country, models, target_date=""):
+    """Fetch one frame per model; a failing model degrades to a warning
+    instead of killing the page (e.g. classical refits still warming up)."""
+    frames, failed = {}, []
+    for m in models:
+        try:
+            frames[m] = to_frame(fetch_forecast(country, m, target_date))
+        except Exception as e:
+            failed.append((m, e))
+    return frames, failed
+
+
+def warn_failures(failed):
+    if failed:
+        st.warning(
+            "Could not load " + ", ".join(MODEL_LABELS[m] for m, _ in failed)
+            + f" — showing the rest ({failed[0][1]})."
+        )
+
+
+def trim_common(frames):
+    """Restrict every frame to the time window ALL of them share.
+
+    Country/model horizons can sit hours or a day apart when their data
+    downloads ran at different times — plotting raw horizons draws the lines
+    side by side instead of overlaid. Frames with no overlap are dropped
+    (reported by the caller), never silently misplotted."""
+    lo = max(d["timestamp"].min() for d in frames.values())
+    hi = min(d["timestamp"].max() for d in frames.values())
+    kept, dropped = {}, []
+    for key, d in frames.items():
+        t = d[(d["timestamp"] >= lo) & (d["timestamp"] <= hi)]
+        if t.empty:
+            dropped.append(key)
+        else:
+            kept[key] = t
+    return kept, dropped
+
+
+def align_frames(frames):
+    """Trim to the shared window and warn about anything dropped."""
+    frames = {k: v for k, v in frames.items() if not v.empty}
+    if len(frames) > 1:
+        frames, dropped = trim_common(frames)
+        if dropped:
+            st.warning(
+                "No time overlap for " + ", ".join(str(k) for k in dropped)
+                + " — their data horizon sits outside the shared window "
+                  "(refresh that country's data downloads)."
+            )
+    return frames
 
 
 # ---------------- page ----------------
@@ -100,24 +163,64 @@ if dark:
 template = "plotly_dark" if dark else "plotly_white"
 plot_bg = "rgba(0,0,0,0)"
 
-try:
-    with st.spinner("Loading forecast…"):
-        frames = {m: fetch_forecast(country, m, past_date.strip()) for m in models}
-except Exception as e:
-    st.error(f"Backend unreachable ({e}). Is the FastAPI server running on {API_URL}?")
-    st.stop()
+
+def apply_layout(fig, height=440):
+    fig.update_layout(
+        template=template,
+        margin={"l": 10, "r": 10, "t": 10, "b": 10},
+        height=height,
+        plot_bgcolor=plot_bg,
+        paper_bgcolor=plot_bg,
+        yaxis_title="EUR / MWh",
+        legend={"orientation": "h", "y": 1.02},
+        xaxis={"dtick": 3600000 * 3, "tickformat": "%H:%M"},
+    )
+
+
+def add_band(fig, d, color, label=""):
+    if {"q10", "q90"} <= set(d.columns):
+        fill = (f"rgba({int(color[1:3], 16)},{int(color[3:5], 16)},"
+                f"{int(color[5:7], 16)},0.16)")
+        fig.add_trace(go.Scatter(
+            x=d["timestamp"], y=d["q90"], mode="lines",
+            line={"width": 0}, hoverinfo="skip", name=f"q90 {label}".strip(),
+        ))
+        fig.add_trace(go.Scatter(
+            x=d["timestamp"], y=d["q10"], mode="lines", line={"width": 0},
+            fill="tonexty", fillcolor=fill, hoverinfo="skip",
+            name=f"q10–q90 band {label}".strip(),
+        ))
+
+
+def add_actual(fig, d):
+    if "actual_price_eur_mwh" in d.columns:
+        a = d.dropna(subset=["actual_price_eur_mwh"])
+        if not a.empty:
+            fig.add_trace(go.Scatter(
+                x=a["timestamp"], y=a["actual_price_eur_mwh"], mode="lines",
+                line={"color": "black", "dash": "dash", "width": 1.8},
+                name="actual", hovertemplate=HOVER,
+            ))
+
 
 st.title("⚡ EU Electricity Price Forecaster")
+
+# ---------------- forecast tab ----------------
+with st.spinner("Loading forecast…"):
+    frames, failed = fetch_frames(country, models, past_date.strip())
+warn_failures(failed)
+frames = align_frames(frames)
+if not frames:
+    st.error(f"Backend unreachable. Is the FastAPI server running on {API_URL}?")
+    st.stop()
+models = [m for m in models if m in frames]
+
 st.caption(
     f"Day-ahead electricity prices · {get_country(country)['name']} · "
     + " · ".join(MODEL_LABELS[m] for m in models)
 )
 
-first = pd.DataFrame(frames[models[0]])
-if first.empty:
-    st.warning("No forecast data returned.")
-    st.stop()
-first["timestamp"] = pd.to_datetime(first["timestamp"])
+first = frames[models[0]]
 prices = first["predicted_price_eur_mwh"]
 peak_hour = first.loc[prices.idxmax(), "timestamp"].strftime("%H:%M")
 st.markdown(
@@ -127,62 +230,38 @@ st.markdown(
 
 color = COUNTRY_COLORS.get(country, "#7f7f7f")
 fig = go.Figure()
-if show_ci and {"q10", "q90"} <= set(first.columns):
-    fig.add_trace(go.Scatter(
-        x=first["timestamp"], y=first["q90"], mode="lines",
-        line={"width": 0}, hoverinfo="skip", name="q90",
-    ))
-    fig.add_trace(go.Scatter(
-        x=first["timestamp"], y=first["q10"], mode="lines",
-        line={"width": 0}, fill="tonexty", fillcolor=f"rgba({int(color[1:3], 16)},"
-        f"{int(color[3:5], 16)},{int(color[5:7], 16)},0.16)",
-        hoverinfo="skip", name="q10–q90 band",
-    ))
-
+if show_ci:
+    add_band(fig, first, color)
 for m in models:
-    d = first if m == models[0] else pd.DataFrame(frames[m])
-    d["timestamp"] = pd.to_datetime(d["timestamp"])
     style = {"color": color, "width": 2.6, "dash": "solid"} if m == "tft" else MODEL_LINE[m]
     fig.add_trace(go.Scatter(
-        x=d["timestamp"], y=d["predicted_price_eur_mwh"],
+        x=frames[m]["timestamp"], y=frames[m]["predicted_price_eur_mwh"],
         mode="lines+markers" if m == "tft" else "lines",
         line=style, marker={"size": 5} if m == "tft" else None,
-        name=MODEL_LABELS[m],
-        hovertemplate="%{x|%H:%M} — %{y:.1f} EUR/MWh<extra></extra>",
+        name=MODEL_LABELS[m], hovertemplate=HOVER,
     ))
+add_actual(fig, first)
+apply_layout(fig)
+st.plotly_chart(fig, width="stretch")
 
-if "actual_price_eur_mwh" in first.columns:
-    fig.add_trace(go.Scatter(
-        x=first["timestamp"], y=first["actual_price_eur_mwh"], mode="lines",
-        line={"color": "black", "dash": "dash", "width": 1.8},
-        name="actual",
-        hovertemplate="%{x|%H:%M} — %{y:.1f} EUR/MWh<extra></extra>",
-    ))
-fig.update_layout(
-    template=template,
-    margin={"l": 10, "r": 10, "t": 10, "b": 10},
-    height=440,
-    plot_bgcolor=plot_bg,
-    paper_bgcolor=plot_bg,
-    yaxis_title="EUR / MWh",
-    legend={"orientation": "h", "y": 1.02},
-    xaxis={"dtick": 3600000 * 3, "tickformat": "%H:%M"},
-)
-st.plotly_chart(fig, use_container_width=True)
-
-display = pd.DataFrame({"Time": first["timestamp"].dt.strftime("%Y-%m-%d %H:%M")})
+base_idx = first["timestamp"]
+display = pd.DataFrame({"Time": base_idx.dt.strftime("%Y-%m-%d %H:%M")})
 for m in models:
-    d = first if m == models[0] else pd.DataFrame(frames[m])
-    display[MODEL_LABELS[m]] = d["predicted_price_eur_mwh"].round(2).tolist()
+    display[MODEL_LABELS[m]] = (
+        frames[m].set_index("timestamp")["predicted_price_eur_mwh"]
+        .reindex(base_idx).round(2).tolist()
+    )
 for q in ("q10", "q90"):
     if show_ci and q in first.columns:
         display[f"TFT {q}"] = first[q].round(2).tolist()
 if "actual_price_eur_mwh" in first.columns:
     display["Actual (EUR/MWh)"] = first["actual_price_eur_mwh"].round(2).tolist()
-st.dataframe(display, use_container_width=True, height=320)
+st.dataframe(display, width="stretch", height=320)
 
-# ---------------- compare + benchmark tabs ----------------
-tab_compare, tab_bench = st.tabs(["Compare countries", "Benchmark"])
+# ---------------- compare + backtest + benchmark tabs ----------------
+tab_compare, tab_backtest, tab_bench = st.tabs(
+    ["Compare countries", "Backtest days", "Benchmark"]
+)
 
 with tab_compare:
     cmp_codes = st.multiselect(
@@ -194,48 +273,116 @@ with tab_compare:
     if cmp_codes:
         try:
             payload = fetch_comparison(cmp_codes, cmp_model)
-            fig2 = go.Figure()
-            table = None
-            for entry in payload.get("forecasts", []):
-                c = entry["country"]
-                d = pd.DataFrame(entry["forecast"])
-                d["timestamp"] = pd.to_datetime(d["timestamp"])
-                col = COUNTRY_COLORS.get(c, "#7f7f7f")
-                if {"q10", "q90"} <= set(d.columns) and cmp_model == "tft":
-                    fig2.add_trace(go.Scatter(
-                        x=d["timestamp"], y=d["q90"], mode="lines",
-                        line={"width": 0}, hoverinfo="skip", name=f"{c} q90",
-                    ))
-                    fig2.add_trace(go.Scatter(
-                        x=d["timestamp"], y=d["q10"], mode="lines", line={"width": 0},
-                        fill="tonexty",
-                        fillcolor=f"rgba({int(col[1:3], 16)},{int(col[3:5], 16)},"
-                        f"{int(col[5:7], 16)},0.10)",
-                        hoverinfo="skip", name=f"{c} band",
-                    ))
-                fig2.add_trace(go.Scatter(
-                    x=d["timestamp"], y=d["predicted_price_eur_mwh"], mode="lines",
-                    line={"color": col, "width": 2.4}, name=entry["country_name"],
-                    hovertemplate="%{x|%H:%M} — %{y:.1f} EUR/MWh<extra></extra>",
-                ))
-                if table is None:
-                    table = pd.DataFrame({"Time": d["timestamp"].dt.strftime("%H:%M")})
-                table[c] = d["predicted_price_eur_mwh"].round(2)
-            fig2.update_layout(
-                template=template, margin={"l": 10, "r": 10, "t": 10, "b": 10},
-                height=420, plot_bgcolor=plot_bg, paper_bgcolor=plot_bg,
-                yaxis_title="EUR / MWh",
-                legend={"orientation": "h", "y": 1.02},
-                xaxis={"dtick": 3600000 * 3, "tickformat": "%H:%M"},
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-            if table is not None:
-                st.dataframe(table, use_container_width=True, height=300)
-            skipped = payload.get("skipped", [])
-            if skipped:
-                st.info("; ".join(f"{s['country']}: {s['reason']}" for s in skipped))
         except Exception as e:
             st.error(f"Comparison failed: {e}")
+            payload = None
+        if payload:
+            cmp_frames = {
+                e["country"]: to_frame(e["forecast"])
+                for e in payload.get("forecasts", [])
+            }
+            cmp_frames = align_frames(cmp_frames)
+            skipped = list(payload.get("skipped", []))
+            for key, d in cmp_frames.items():
+                if d.empty:
+                    skipped.append({"country": key, "reason": "no shared time window"})
+            cmp_frames = {k: v for k, v in cmp_frames.items() if not v.empty}
+            if skipped:
+                st.info("; ".join(f"{s['country']}: {s['reason']}" for s in skipped))
+            if cmp_frames:
+                fig2 = go.Figure()
+                table, table_idx = None, None
+                for c, d in cmp_frames.items():
+                    col = COUNTRY_COLORS.get(c, "#7f7f7f")
+                    if cmp_model == "tft":
+                        add_band(fig2, d, col, label=c)
+                    fig2.add_trace(go.Scatter(
+                        x=d["timestamp"], y=d["predicted_price_eur_mwh"],
+                        mode="lines", line={"color": col, "width": 2.4},
+                        name=COUNTRIES[c]["name"], hovertemplate=HOVER,
+                    ))
+                    if table is None:
+                        table_idx = d["timestamp"]
+                        table = pd.DataFrame(
+                            {"Time": table_idx.dt.strftime("%H:%M")}
+                        )
+                    table[COUNTRIES[c]["name"]] = (
+                        d.set_index("timestamp")["predicted_price_eur_mwh"]
+                        .reindex(table_idx).round(2).tolist()
+                    )
+                apply_layout(fig2, height=420)
+                st.plotly_chart(fig2, width="stretch")
+                if table is not None:
+                    st.dataframe(table, width="stretch", height=300)
+
+with tab_backtest:
+    st.caption(
+        "Forecast vs. actual on the 5 most recent complete days. Every served "
+        "model was trained before these dates — this is an honest "
+        "out-of-sample error read, not a training fit."
+    )
+    try:
+        days = _get("/days", {"country": country, "n": 5}).get("days", [])
+    except Exception as e:
+        days = []
+        st.warning(f"Could not load backtest days ({e}).")
+    if days:
+        day = st.segmented_control(
+            "Day", days, default=days[-1],
+            format_func=lambda d: pd.Timestamp(d).strftime("%a %d %b"),
+        ) or days[-1]
+        with st.spinner(f"Scoring {day}…"):
+            bt_frames, bt_failed = fetch_frames(country, models, day)
+        warn_failures(bt_failed)
+        bt_frames = align_frames(bt_frames)
+        if bt_frames:
+            bt_models = [m for m in models if m in bt_frames]
+            bt_first = bt_frames[bt_models[0]]
+            fig3 = go.Figure()
+            if show_ci and "tft" in bt_frames:
+                add_band(fig3, bt_frames["tft"], color)
+            for m in bt_models:
+                style = ({"color": color, "width": 2.6, "dash": "solid"}
+                         if m == "tft" else MODEL_LINE[m])
+                fig3.add_trace(go.Scatter(
+                    x=bt_frames[m]["timestamp"],
+                    y=bt_frames[m]["predicted_price_eur_mwh"],
+                    mode="lines" if m != "tft" else "lines+markers",
+                    line=style, marker={"size": 5} if m == "tft" else None,
+                    name=MODEL_LABELS[m], hovertemplate=HOVER,
+                ))
+            add_actual(fig3, bt_first)
+            apply_layout(fig3)
+            st.plotly_chart(fig3, width="stretch")
+
+            rows = []
+            for m in bt_models:
+                d = bt_frames[m]
+                if "actual_price_eur_mwh" not in d.columns:
+                    continue
+                a = d.dropna(subset=["actual_price_eur_mwh"])
+                if a.empty:
+                    continue
+                err = a["predicted_price_eur_mwh"] - a["actual_price_eur_mwh"]
+                rows.append({
+                    "Model": MODEL_LABELS[m],
+                    "MAE (EUR/MWh)": err.abs().mean(),
+                    "RMSE (EUR/MWh)": (err ** 2).mean() ** 0.5,
+                    "Bias (EUR/MWh)": err.mean(),
+                    "Hours scored": len(a),
+                })
+            if rows:
+                metrics = (
+                    pd.DataFrame(rows).sort_values("MAE (EUR/MWh)")
+                    .round(2).reset_index(drop=True)
+                )
+                metrics.loc[0, "Model"] += "  🏆"
+                st.caption(f"Day-ahead error on {day} — lower is better:")
+                st.dataframe(metrics, width="stretch", hide_index=True)
+            else:
+                st.info("No actuals recorded for this day yet.")
+    else:
+        st.info("No complete actual-price days available yet — run the pipeline.")
 
 with tab_bench:
     try:
@@ -254,6 +401,6 @@ with tab_bench:
                             "RMSE (EUR/MWh)", "rmae", "Served") if c in b.columns]
         b = b[keep].sort_values(["Country", "Served"], ascending=[True, False])
         st.caption("Walk-forward benchmark (8-week holdout, EUR/MWh) — ✓ marks the served model.")
-        st.dataframe(b, use_container_width=True, height=420)
+        st.dataframe(b, width="stretch", height=420)
     else:
         st.info("No benchmark tables found — run the pipeline first.")
