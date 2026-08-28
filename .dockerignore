@@ -13,3 +13,9 @@ mlflow.db
 .ruff_cache/
 Dockerfile
 .dockerignore
+models/
+reports/
+data/
+lightning_logs/
+.zcode/
+docs/

@@ -31,7 +31,7 @@ Supported out of the box (config-driven — add more in `src/config.py`):
 - **Config-driven countries:** Add a bidding zone by adding one entry to `src/config.py`.
 - **Automated data pipelines:** Fetches live data from the **Energy-Charts API** (EPEX SPOT / ENTSO-E transparency aggregator) and **Open-Meteo**. **No API keys required.**
 - **Deep sequence modeling:** Temporal Fusion Transformer via `darts` + PyTorch, with quantile outputs (10/50/90).
-- **Walk-forward backtesting:** One shared harness (`src/evaluation/backtest.py`) scores every model — naive persistence, Linear Regression, LightGBM, TFT — on identical splits, covariates, and a day-ahead protocol, with MAE/RMSE/rMAE.
+- **Walk-forward backtesting:** One shared harness (`src/evaluation/backtest.py`) scores every model — naive persistence, Linear Regression, LightGBM, TFT — on identical splits, covariates, and a day-ahead protocol, with MAE/RMSE/rMAE plus pinball loss and coverage for the quantile bands.
 - **FastAPI backend:** REST endpoints for single-country forecasts, cross-country comparison, per-country metrics, and price summaries.
 - **Interactive dashboard (Streamlit + Plotly):** forecasts auto-load on open; country + model selection (TFT bands, Linear Regression, LightGBM); hover/zoom charts with click-to-toggle legend; dark mode; three-country comparison and the walk-forward benchmark table.
 
@@ -172,11 +172,17 @@ streamlit run src/api/dashboard.py
 
 #### Option B: Docker Compose
 
+Services are split into profiles: `train` (one-shot, GPU) and `serve` (long-running API + dashboard).
+
 ```bash
-docker-compose up --build
+# One-shot training run (GPU passthrough; downloads data, benchmark, serving bundles):
+docker compose run --rm train
+
+# Serve API (:8000) + dashboard (:8501):
+docker compose --profile serve up api ui
 ```
 
-The UI reads the backend base URL from `API_URL` (defaults to `http://127.0.0.1:8000`; set to `http://api:8000` under Docker).
+Artifacts (`data/`, `models/`, `reports/`) are bind-mounted, so anything `train` produces is visible on the host and to the serving containers. The dashboard reads the backend from `API_URL` (defaults to `http://127.0.0.1:8000`; `http://api:8000` under Docker).
 
 ## 🌐 API reference
 
@@ -186,8 +192,8 @@ All prices are in **EUR/MWh**. The API loads every country model that has artifa
 |----------|-------------|
 | `GET /` | Health check; lists loaded and available countries. |
 | `GET /predict?country=PT&model=tft&target_date=YYYY-MM-DD` | 24h forecast for one country. `model`: `tft` (default; q10/50/90 bands), `lr`, `lgbm` (point forecasts). `target_date` optional (retroactive). |
-| `GET /compare?countries=PT,ES,CH&target_date=YYYY-MM-DD` | Forecasts for multiple countries in one payload, for overlay plots. Countries without a loaded model are reported in `skipped`. |
-| `GET /metrics` | Per-country benchmark metrics (MAE/RMSE/rMAE) parsed from `reports/latest/benchmark_*.txt`. |
+| `GET /compare?countries=PT,ES,CH&model=tft` | Forecasts for multiple countries in one payload, for overlay plots. Accepts `model` like `/predict`; countries without a loaded model are reported in `skipped`. |
+| `GET /metrics` | Per-country benchmark metrics (MAE/RMSE/rMAE) parsed from `reports/latest/benchmark_*.txt`, with the served model flagged. |
 | `GET /summary?countries=PT,ES,CH` | Price-level summary per country: mean/median/min/max forecast price and peak hour. |
 
 Response field names (note the EUR currency):
@@ -214,7 +220,7 @@ Response field names (note the EUR currency):
 - **Per-country models.** Each country gets its own TFT, scalers, and feature table, isolated by a country suffix. This keeps performance per market independent and makes adding a country a config-only change at the data layer.
 - **Multi-horizon forecasting.** The TFT processes a 168-hour (7-day) lookback and directly outputs the 24-hour day-ahead curve in one shot, avoiding auto-regressive error compounding.
 - **Probabilistic forecasting.** Configured with `QuantileRegression`, the model outputs a distribution (10/50/90 percentiles) to quantify uncertainty — important in spike-prone markets.
-- **Hourly normalization.** Download resamples any resolution to hourly so the per-country feature columns are consistent (6 base columns + calendar + cyclic encodings = 17 features).
+- **Hourly normalization + honest covariates.** Download resamples any resolution to hourly so per-country features stay aligned (17 covariates: weather, calendar, cyclic encodings, and load lagged 24h/168h — realized load at forecast time is excluded, it is not knowable at day-ahead gate closure).
 - **Strict covariate separation.** `future_covariates` (weather, calendar) are separated from the target, and scalers are fitted only on the training split to prevent leakage during walk-forward backtesting.
 - **Hardware-agnostic inference.** `trainer_params` are overridden to `accelerator='cpu'` at load time, so GPU-trained models serve on CPU.
 - **Secure deserialization.** `QuantileRegression` and `GlobalTimerCallback` are registered via `torch.serialization.add_safe_globals` for safe unpickling (PyTorch 2.6+ `weights_only` default).
