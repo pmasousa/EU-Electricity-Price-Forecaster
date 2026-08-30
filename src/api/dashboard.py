@@ -375,7 +375,8 @@ def add_actual(fig, d):
         if not a.empty:
             fig.add_trace(go.Scatter(
                 x=a["timestamp"], y=a["actual_price_eur_mwh"], mode="lines",
-                line={"color": "black", "dash": "dash", "width": 1.8},
+                line={"color": "#e6edf3" if dark else "black",
+                      "dash": "dash", "width": 1.8},
                 name="actual", hovertemplate=HOVER,
             ))
 
