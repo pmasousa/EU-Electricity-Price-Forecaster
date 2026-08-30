@@ -3,75 +3,106 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>⚡ EU Electricity Price Forecaster — demo</title>
+<title>EU Electricity Price Forecaster — demo</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   :root {
-    --primary: #2e9e5b;
-    --bg: #ffffff;
-    --surface: #f3f8f4;
-    --border: #d9e5dd;
-    --text: #222426;
+    --primary: #1f8a4c;
+    --primary-deep: #166b3a;
+    --bg: #fbfcfb;
+    --surface: #f4f8f5;
+    --border: #e2ebe5;
+    --text: #1c2620;
     --muted: #5f6b64;
+    --faint: #8a978d;
+    --card: #ffffff;
     --cell: #ffffff;
     --cell-head: #f0f6f2;
   }
   body.dark {
-    --bg: #0e1512;
-    --surface: #16211c;
-    --border: #27352d;
+    --bg: #0b120f;
+    --surface: #101915;
+    --border: #22302a;
     --text: #e6edf3;
     --muted: #9fb3a8;
-    --cell: #131c17;
-    --cell-head: #1a2620;
+    --faint: #6f8177;
+    --card: #101915;
+    --cell: #121c17;
+    --cell-head: #16211c;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font-family: "Source Sans Pro", "Segoe UI", system-ui, sans-serif;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   }
   .layout { display: flex; min-height: 100vh; }
   .side {
-    width: 270px; flex: 0 0 270px; background: var(--surface);
+    width: 260px; flex: 0 0 260px; background: var(--surface);
     border-right: 1px solid var(--border); padding: 18px 16px;
   }
-  .main { flex: 1; padding: 20px 26px; max-width: 1100px; }
-  h1 { font-size: 1.35rem; margin: 4px 0 2px; }
-  .badge {
-    display: inline-block; font-size: .72rem; padding: 2px 9px; border-radius: 999px;
-    border: 1px solid var(--primary); color: var(--primary); margin-bottom: 10px;
-    letter-spacing: .04em; text-transform: uppercase;
+  .main { flex: 1; padding: 22px 28px; max-width: 1120px; }
+  .app-head { display: flex; align-items: center; gap: 14px; margin: 2px 0 14px; }
+  .app-mark {
+    width: 40px; height: 40px; border-radius: 10px; flex: 0 0 40px;
+    background: linear-gradient(135deg, #1f8a4c, #166b3a);
+    color: #fff; font-size: 20px; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 2px 6px rgba(22, 107, 58, 0.25);
   }
-  .caption { color: var(--muted); font-size: .88rem; margin: 2px 0 14px; }
-  .widget { margin-bottom: 16px; }
-  .widget label.head { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 5px; }
-  select, .btn {
-    width: 100%; padding: 8px 10px; background: var(--bg); color: var(--text);
+  h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .app-sub { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-top: 2px; }
+  .badge {
+    display: inline-block; font-size: .68rem; font-weight: 600; padding: 2px 10px;
+    border-radius: 999px; border: 1px solid var(--primary); color: var(--primary);
+    margin-bottom: 14px; letter-spacing: .08em; text-transform: uppercase;
+  }
+  .eyebrow {
+    font-size: .68rem; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); margin: 18px 0 6px;
+  }
+  .eyebrow:first-child { margin-top: 0; }
+  select {
+    width: 100%; padding: 8px 10px; background: var(--card); color: var(--text);
     border: 1px solid var(--border); border-radius: 6px; font-size: .95rem; cursor: pointer;
   }
-  .checks label { display: flex; gap: 8px; align-items: center; padding: 4px 0; cursor: pointer; }
+  .checks label { display: flex; gap: 8px; align-items: center; padding: 4px 0; cursor: pointer; font-size: .92rem; }
   .checks input, .switch input { accent-color: var(--primary); width: 16px; height: 16px; }
-  .switch { display: flex; gap: 8px; align-items: center; cursor: pointer; }
-  .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin: 14px 0 16px; }
-  .tab {
-    padding: 8px 16px; cursor: pointer; color: var(--muted); font-size: .95rem;
-    border-bottom: 2px solid transparent; margin-bottom: -2px; user-select: none;
-  }
-  .tab.active { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
-  .days { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 14px; }
+  .switch { display: flex; gap: 8px; align-items: center; cursor: pointer; font-size: .92rem; }
+  .caption { color: var(--muted); font-size: .84rem; margin: 0 0 12px; }
+  .days { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; }
   .day {
-    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--muted); cursor: pointer; font-size: .88rem;
+    padding: 6px 13px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted); cursor: pointer;
+    font-size: .86rem; font-weight: 500; user-select: none;
   }
   .day.active { border-color: var(--primary); color: var(--primary); font-weight: 600; }
-  .peak { font-size: .95rem; margin: 4px 0 10px; }
-  .peak b { color: var(--primary); }
-  table { border-collapse: collapse; width: 100%; font-size: .9rem; margin-top: 10px; }
-  th, td { padding: 6px 10px; border: 1px solid var(--border); text-align: right; }
+  .stat-strip { display: flex; gap: 12px; margin: 4px 0 14px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 128px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; }
+  .stat .k { font-size: .66rem; font-weight: 600; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--faint); margin-bottom: 2px; }
+  .stat .v { font-size: 1.28rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .u { font-size: .72rem; color: var(--faint); font-weight: 500; }
+  .stat.hero { background: #eef7f1; border-color: #cfe5d8; }
+  .stat.hero .v { color: var(--primary-deep); }
+  body.dark .stat.hero { background: #14231b; border-color: #2c4436; }
+  body.dark .stat.hero .v { color: #4ecb82; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 10px 6px 4px; margin-bottom: 14px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; margin: 8px 0 14px; }
+  th, td { padding: 6px 10px; border: 1px solid var(--border); text-align: right;
+    background: var(--cell); }
   th { background: var(--cell-head); color: var(--muted); font-weight: 600; }
-  td { background: var(--cell); }
   th:first-child, td:first-child { text-align: left; }
-  .foot { color: var(--muted); font-size: .8rem; margin-top: 26px; line-height: 1.5; }
+  details { border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); margin-bottom: 14px; overflow: hidden; }
+  summary { padding: 10px 14px; cursor: pointer; font-size: .9rem; font-weight: 500; }
+  details table { margin: 0 14px 14px; width: calc(100% - 28px); }
+  .foot { color: var(--faint); font-size: .75rem; margin-top: 24px; line-height: 1.6;
+    border-top: 1px solid var(--border); padding-top: 10px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   .foot a { color: var(--primary); }
   @media (max-width: 800px) {
     .layout { flex-direction: column; }
@@ -83,82 +114,93 @@
 <div class="layout">
   <div class="side">
     <span class="badge">Static demo</span>
-    <div class="widget">
-      <label class="head">Country</label>
-      <select id="country">
-        <option value="PT">PT — Portugal</option>
-        <option value="ES">ES — Spain</option>
-        <option value="CH">CH — Switzerland</option>
-      </select>
+    <div class="eyebrow">Market</div>
+    <select id="country">
+      <option value="PT">PT — Portugal</option>
+      <option value="ES">ES — Spain</option>
+      <option value="CH">CH — Switzerland</option>
+    </select>
+    <div class="eyebrow">Models</div>
+    <div class="checks">
+      <label><input type="checkbox" id="m-tft" checked> TFT</label>
+      <label><input type="checkbox" id="m-lr" checked> Linear Regression</label>
+      <label><input type="checkbox" id="m-lgbm" checked> LightGBM</label>
     </div>
-    <div class="widget checks">
-      <label class="head">Models (click the legend to toggle lines)</label>
-      <label><input type="checkbox" id="m-tft" checked> TFT — quantile bands</label>
-      <label><input type="checkbox" id="m-lr"> Linear Regression</label>
-      <label><input type="checkbox" id="m-lgbm"> LightGBM</label>
-    </div>
-    <div class="widget checks">
-      <label class="switch"><input type="checkbox" id="band" checked> Show q10–q90 band (TFT)</label>
-    </div>
-    <div class="widget checks">
-      <label class="switch"><input type="checkbox" id="dark"> 🌙 Dark mode</label>
+    <div class="eyebrow">Display</div>
+    <div class="checks">
+      <label class="switch"><input type="checkbox" id="band" checked> Quantile band (TFT q10–q90)</label>
+      <label class="switch"><input type="checkbox" id="dark"> Dark mode</label>
     </div>
   </div>
   <div class="main">
-    <h1>⚡ EU Electricity Price Forecaster</h1>
+    <div class="app-head">
+      <div class="app-mark">⚡</div>
+      <div>
+        <h1>EU Electricity Price Forecaster</h1>
+        <div class="app-sub">Day-ahead hourly prices · Portugal · Spain · Switzerland ·
+          probabilistic TFT + classical baselines</div>
+      </div>
+    </div>
+    <div class="days" id="days"></div>
     <div class="caption" id="subtitle"></div>
-    <div class="tabs">
-      <div class="tab active" data-tab="forecast">Forecast</div>
-      <div class="tab" data-tab="backtest">Backtest days</div>
-      <div class="tab" data-tab="benchmark">Benchmark</div>
-    </div>
-    <div id="view-forecast">
-      <div class="peak" id="peak"></div>
-      <div id="plot-forecast"></div>
-    </div>
-    <div id="view-backtest" style="display:none">
-      <div class="caption">Forecast vs. actual on the five days frozen in this demo — every model was trained before these dates (out-of-sample).</div>
-      <div class="days" id="days"></div>
-      <div id="plot-backtest"></div>
-      <div class="caption" id="err-caption" style="margin-top:14px"></div>
-      <table id="err-table"></table>
-    </div>
-    <div id="view-benchmark" style="display:none">
-      <div class="caption">Walk-forward benchmark (8-week holdout, EUR/MWh) — ✓ marks the served model.</div>
-      <table id="bench-table"></table>
-    </div>
+    <div class="stat-strip" id="stats"></div>
+    <div class="card"><div id="plot"></div></div>
+    <div id="err-wrap"></div>
+    <details>
+      <summary>Hourly forecast table</summary>
+      <div id="hourly"></div>
+    </details>
     <div class="foot" id="foot"></div>
   </div>
 </div>
 
 <script>
-const COLORS = {PT: "#d62728", ES: "#1f77b4", CH: "#2ca02c"};
+const COLORS = {PT: "#c0392b", ES: "#2e6fa3", CH: "#3d8a5c"};
 const LINES = {
-  lr:   {color: "#e67e22", dash: "dash", width: 2.1},
-  lgbm: {color: "#8e44ad", dash: "dot",  width: 2.1},
+  lr:   {color: "#d98e2b", dash: "dash", width: 2.0},
+  lgbm: {color: "#7d5ba6", dash: "dot",  width: 2.0},
 };
-const LABELS = {tft: "TFT — quantile bands", lr: "Linear Regression", lgbm: "LightGBM"};
+const LABELS = {tft: "TFT", lr: "Linear Regression", lgbm: "LightGBM"};
 const NAMES = {PT: "Portugal", ES: "Spain", CH: "Switzerland"};
 let DATA = null;
-let activeTab = "forecast";
-let activeDay = null;
+let sel = "tomorrow";
 
 const $ = id => document.getElementById(id);
 const country = () => $("country").value;
 const models = () => ["tft", "lr", "lgbm"].filter(m => $("m-" + m).checked);
 const dark = () => document.body.classList.contains("dark");
-const layoutExtra = () => ({
-  paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-  font: {color: dark() ? "#e6edf3" : "#222426"},
-  margin: {l: 50, r: 20, t: 10, b: 40}, height: 420,
-  yaxis: {title: "EUR / MWh", gridcolor: dark() ? "#27352d" : "#e5ece8"},
-  xaxis: {gridcolor: dark() ? "#27352d" : "#e5ece8", tickformat: "%H:%M"},
-  legend: {orientation: "h", y: 1.08},
-  hovermode: "x unified",
-});
+
+function dayLabel(o, days) {
+  if (o === "tomorrow") return "Tomorrow";
+  const i = days.indexOf(o);
+  const prefix = i === days.length - 1 ? "Today" : `t-${days.length - 1 - i}`;
+  const dt = new Date(o + "T12:00:00");
+  return `${prefix} · ${dt.toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"})}`;
+}
+
+function layoutExtra() {
+  const grid = dark() ? "#27352d" : "#e7ede9";
+  const tick = dark() ? "#8fa398" : "#6b7a70";
+  return {
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: {family: "Inter, sans-serif", size: 12, color: dark() ? "#c7d4cb" : "#33413a"},
+    margin: {l: 50, r: 20, t: 26, b: 14}, height: 420,
+    yaxis: {title: {text: "EUR / MWh", font: {size: 11}}, gridcolor: grid,
+            gridwidth: 1, zeroline: false, tickfont: {color: tick, size: 11}},
+    xaxis: {gridcolor: "rgba(0,0,0,0)", tickformat: "%H:%M",
+            tickfont: {color: tick, size: 11}},
+    legend: {orientation: "h", y: 1.08, bgcolor: "rgba(0,0,0,0)",
+             font: {size: 11.5, color: dark() ? "#c7d4cb" : "#33413a"}},
+    hovermode: "x unified",
+    hoverlabel: {bgcolor: dark() ? "#16211c" : "#ffffff",
+                 bordercolor: dark() ? "#2c3a32" : "#d9e5dd",
+                 font: {family: "Inter, sans-serif", size: 12,
+                        color: dark() ? "#e6edf3" : "#17251d"}},
+  };
+}
 const HOVER = "%{y:.1f} EUR/MWh";
 
-function bandTraces(rows, color, key) {
+function bandTraces(rows, color) {
   const q10 = rows.map(r => r.q10), q90 = rows.map(r => r.q90);
   if (q10.some(v => v == null)) return [];
   const rgb = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16)).join(",");
@@ -167,126 +209,121 @@ function bandTraces(rows, color, key) {
      line: {width: 0}, hoverinfo: "skip", showlegend: false},
     {x: rows.map(r => r.timestamp), y: q10, mode: "lines", line: {width: 0},
      fill: "tonexty", fillcolor: `rgba(${rgb},0.16)`, hoverinfo: "skip",
-     name: "q10–q90 band" + (key ? " " + key : "")},
+     name: "q10–q90 band"},
   ];
 }
 
 function modelTrace(rows, m, color) {
-  const style = m === "tft"
-    ? {color, width: 2.6, dash: "solid"} : LINES[m];
-  return {
+  const style = m === "tft" ? {color, width: 2.6, dash: "solid"} : LINES[m];
+  const t = {
     x: rows.map(r => r.timestamp), y: rows.map(r => r.predicted_price_eur_mwh),
     mode: "lines" + (m === "tft" ? "+markers" : ""), line: style,
-    marker: m === "tft" ? {size: 5} : undefined,
     name: LABELS[m], hovertemplate: HOVER,
   };
+  if (m === "tft") t.marker = {size: 5};
+  return t;
 }
 
-function renderForecast() {
-  const c = country(), ms = models();
-  const entry = DATA.countries[c];
-  const tftRows = entry.forecast.tft;
-  const rows = entry.forecast[ms.includes("tft") ? "tft" : ms[0]];
-  const prices = rows.map(r => r.predicted_price_eur_mwh);
-  const peak = prices.indexOf(Math.max(...prices));
-  $("subtitle").textContent = `Day-ahead electricity prices · ${NAMES[c]} · ` +
-    (ms.length ? ms.map(m => LABELS[m]).join(" · ") : "");
-  if (!ms.length) { $("peak").textContent = "Pick at least one model."; return; }
-  const d = new Date(rows[peak].timestamp);
-  $("peak").innerHTML =
-    `<b>Peak ${Math.max(...prices).toFixed(1)} EUR/MWh</b> at ` +
-    `${String(d.getHours()).padStart(2, "0")}:00 (${LABELS[ms[0]]}) · ` +
-    `min ${Math.min(...prices).toFixed(1)} · mean ${(prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(1)}`;
-  const traces = [];
-  if (ms.includes("tft") && $("band").checked)
-    traces.push(...bandTraces(tftRows, COLORS[c]));
-  for (const m of ms) traces.push(modelTrace(entry.forecast[m], m, COLORS[c]));
-  Plotly.react("plot-forecast", traces, layoutExtra(), {responsive: true});
+function statsStrip(rows) {
+  const p = rows.map(r => r.predicted_price_eur_mwh);
+  const peakI = p.indexOf(Math.max(...p));
+  const peakH = new Date(rows[peakI].timestamp).getHours();
+  const cells = [
+    ["Mean", p.reduce((a, b) => a + b, 0) / p.length, "EUR/MWh", false],
+    ["Peak", Math.max(...p), String(peakH).padStart(2, "0") + ":00", true],
+    ["Min", Math.min(...p), "EUR/MWh", false],
+    ["Spread", Math.max(...p) - Math.min(...p), "EUR/MWh", false],
+  ];
+  $("stats").innerHTML = cells.map(([k, v, u, hero]) =>
+    `<div class="stat${hero ? " hero" : ""}"><div class="k">${k}</div>` +
+    `<div class="v">${v.toFixed(1)}</div><div class="u">${u}</div></div>`).join("");
 }
 
-function renderBacktest() {
-  const c = country(), ms = models(), entry = DATA.countries[c];
-  const days = Object.keys(entry.backtest);
-  if (!activeDay || !days.includes(activeDay)) activeDay = days[days.length - 1];
-  $("days").innerHTML = days.map(d => {
-    const dt = new Date(d + "T12:00:00");
-    const label = dt.toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"});
-    return `<div class="day${d === activeDay ? " active" : ""}" data-day="${d}">${label}</div>`;
-  }).join("");
-  document.querySelectorAll(".day").forEach(el =>
-    el.onclick = () => { activeDay = el.dataset.day; renderBacktest(); });
-  if (!ms.length) { Plotly.purge("plot-backtest"); return; }
-  const day = entry.backtest[activeDay];
-  const tftRows = day.tft;
-  const traces = [];
-  if (ms.includes("tft") && $("band").checked)
-    traces.push(...bandTraces(tftRows, COLORS[c]));
-  for (const m of ms) traces.push(modelTrace(day[m], m, COLORS[c]));
-  const actual = day[ms[0]].filter(r => r.actual_price_eur_mwh != null);
-  if (actual.length)
-    traces.push({
-      x: actual.map(r => r.timestamp), y: actual.map(r => r.actual_price_eur_mwh),
-      mode: "lines", line: {color: "black", dash: "dash", width: 1.8},
-      name: "actual", hovertemplate: HOVER,
-    });
-  Plotly.react("plot-backtest", traces, layoutExtra(), {responsive: true});
-
-  const rowsOut = [];
+function errorTable(dayData, ms, day) {
+  const rows = [];
   for (const m of ms) {
-    const a = day[m].filter(r => r.actual_price_eur_mwh != null);
+    const a = dayData[m].filter(r => r.actual_price_eur_mwh != null);
     if (!a.length) continue;
     const err = a.map(r => r.predicted_price_eur_mwh - r.actual_price_eur_mwh);
-    rowsOut.push({
+    rows.push({
       Model: LABELS[m],
       MAE: err.reduce((s, e) => s + Math.abs(e), 0) / err.length,
       RMSE: Math.sqrt(err.reduce((s, e) => s + e * e, 0) / err.length),
       Bias: err.reduce((s, e) => s + e, 0) / err.length,
     });
   }
-  rowsOut.sort((a, b) => a.MAE - b.MAE);
-  $("err-caption").textContent = `Day-ahead error on ${activeDay} — lower is better:`;
-  $("err-table").innerHTML =
-    "<tr><th>Model</th><th>MAE (EUR/MWh)</th><th>RMSE (EUR/MWh)</th><th>Bias (EUR/MWh)</th></tr>" +
-    rowsOut.map((r, i) =>
+  if (!rows.length) { $("err-wrap").innerHTML = ""; return; }
+  rows.sort((a, b) => a.MAE - b.MAE);
+  $("err-wrap").innerHTML =
+    `<div class="caption" style="margin-top:2px">Day-ahead error on ${day} — lower is better:</div>` +
+    `<table><tr><th>Model</th><th>MAE (EUR/MWh)</th><th>RMSE (EUR/MWh)</th><th>Bias (EUR/MWh)</th></tr>` +
+    rows.map((r, i) =>
       `<tr><td>${r.Model}${i === 0 ? "  🏆" : ""}</td><td>${r.MAE.toFixed(2)}</td>` +
-      `<td>${r.RMSE.toFixed(2)}</td><td>${r.Bias.toFixed(2)}</td></tr>`).join("");
+      `<td>${r.RMSE.toFixed(2)}</td><td>${r.Bias.toFixed(2)}</td></tr>`).join("") + "</table>";
 }
 
-function renderBenchmark() {
-  const cols = ["Country", "Model", "MAE (EUR/MWh)", "RMSE (EUR/MWh)", "rMAE", "Served"];
-  const rows = DATA.metrics.map(r => [
-    r.country, r.model, r.mae.toFixed(2), r.rmse.toFixed(2),
-    r.rmae != null ? r.rmae.toFixed(2) : "—", r.served ? "✓" : "",
-  ]);
-  $("bench-table").innerHTML =
-    "<tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>" +
-    rows.map(r => "<tr>" + r.map(v => `<td>${v}</td>`).join("") + "</tr>").join("");
+function hourlyTable(rows, ms, withActual) {
+  const head = ["Time", ...ms.map(m => LABELS[m]),
+    ...(ms.includes("tft") && $("band").checked ? ["TFT q10", "TFT q90"] : []),
+    ...(withActual ? ["Actual (EUR/MWh)"] : [])];
+  const body = rows.map(r => {
+    const cells = [new Date(r.timestamp).toISOString().slice(0, 16).replace("T", " "),
+      ...ms.map(m => r.predicted_price_eur_mwh.toFixed(2))];
+    if (ms.includes("tft") && $("band").checked && r.q10 != null)
+      cells.push(r.q10.toFixed(2), r.q90.toFixed(2));
+    if (withActual) cells.push(r.actual_price_eur_mwh != null ? r.actual_price_eur_mwh.toFixed(2) : "—");
+    return "<tr>" + cells.map(c => `<td>${c}</td>`).join("") + "</tr>";
+  });
+  $("hourly").innerHTML = "<table><tr>" + head.map(h => `<th>${h}</th>`).join("") +
+    "</tr>" + body.join("") + "</table>";
 }
 
 function render() {
-  if (activeTab === "forecast") renderForecast();
-  else if (activeTab === "backtest") renderBacktest();
-  else renderBenchmark();
-}
+  const c = country(), ms = models(), entry = DATA.countries[c];
+  const days = Object.keys(entry.backtest);
+  // day pills
+  $("days").innerHTML = [...days, "tomorrow"].map(o =>
+    `<div class="day${o === sel ? " active" : ""}" data-day="${o}">${dayLabel(o, days)}</div>`).join("");
+  document.querySelectorAll(".day").forEach(el =>
+    el.onclick = () => { sel = el.dataset.day; render(); });
+  if (!ms.length) {
+    $("subtitle").textContent = "Pick at least one model.";
+    $("stats").innerHTML = ""; Plotly.purge("plot"); $("err-wrap").innerHTML = "";
+    return;
+  }
+  const replay = sel !== "tomorrow";
+  const dayData = replay ? entry.backtest[sel] : entry.forecast;
+  const first = dayData[ms.includes("tft") ? "tft" : ms[0]];
+  $("subtitle").textContent = replay
+    ? `${NAMES[c]} · replaying ${sel} — out-of-sample: every model was trained before this date · ${ms.map(m => LABELS[m]).join(" · ")}`
+    : `${NAMES[c]} · next-24h day-ahead forecast · ${ms.map(m => LABELS[m]).join(" · ")}`;
+  statsStrip(first);
 
-function rerenderAll() {
-  for (const v of ["forecast", "backtest", "benchmark"])
-    $("view-" + v).style.display = v === activeTab ? "" : "none";
-  document.querySelectorAll(".tab").forEach(t =>
-    t.classList.toggle("active", t.dataset.tab === activeTab));
-  render();
+  const traces = [];
+  if (ms.includes("tft") && $("band").checked) traces.push(...bandTraces(dayData.tft, COLORS[c]));
+  for (const m of ms) traces.push(modelTrace(dayData[m], m, COLORS[c]));
+  const actual = first.filter(r => r.actual_price_eur_mwh != null);
+  if (replay && actual.length)
+    traces.push({
+      x: actual.map(r => r.timestamp), y: actual.map(r => r.actual_price_eur_mwh),
+      mode: "lines", line: {color: dark() ? "#e6edf3" : "black", dash: "dash", width: 1.8},
+      name: "actual", hovertemplate: HOVER,
+    });
+  Plotly.react("plot", traces, layoutExtra(), {responsive: true});
+
+  if (replay) errorTable(dayData, ms, sel);
+  else $("err-wrap").innerHTML = "";
+  hourlyTable(first, ms, replay);
 }
 
 fetch("demo_data.json").then(r => r.json()).then(d => {
   DATA = d;
   $("foot").innerHTML =
-    `${d.source}<br>Snapshot frozen ${d.generated_at}. ` +
-    `Source: <a href="https://github.com/pmasousa/EU-Electricity-Price-Forecaster">EU-Electricity-Price-Forecaster</a>.`;
-  rerenderAll();
+    `<span><b>Data</b> Energy-Charts (EPEX SPOT / ENTSO-E) · Open-Meteo</span>` +
+    `<span>Snapshot frozen ${d.generated_at} — <a href="https://github.com/pmasousa/EU-Electricity-Price-Forecaster">repo</a></span>`;
+  render();
 });
 
-document.querySelectorAll(".tab").forEach(t =>
-  t.onclick = () => { activeTab = t.dataset.tab; rerenderAll(); });
 for (const id of ["country", "m-tft", "m-lr", "m-lgbm", "band"])
   $(id).addEventListener("change", render);
 $("dark").addEventListener("change", () => {
