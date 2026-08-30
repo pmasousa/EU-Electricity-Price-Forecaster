@@ -2,8 +2,8 @@
 # Streamlit reads this at server start — restart `streamlit run` after edits.
 [theme]
 base = "light"
-primaryColor = "#2e9e5b"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f3f8f4"
-textColor = "#222426"
+primaryColor = "#1f8a4c"
+backgroundColor = "#fbfcfb"
+secondaryBackgroundColor = "#f4f8f5"
+textColor = "#1c2620"
 font = "sans serif"

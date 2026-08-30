@@ -23,9 +23,9 @@ from src.config import COUNTRIES, DEFAULT_COUNTRIES, get_country
 
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
-COUNTRY_COLORS = {"PT": "#d62728", "ES": "#1f77b4", "CH": "#2ca02c"}
+COUNTRY_COLORS = {"PT": "#c0392b", "ES": "#2e6fa3", "CH": "#3d8a5c"}
 MODEL_LABELS = {
-    "tft": "TFT — quantile bands",
+    "tft": "TFT",
     "lr": "Linear Regression",
     "lgbm": "LightGBM",
 }
@@ -33,21 +33,87 @@ MODEL_LABELS = {
 # Line style per overlaid model; the TFT keeps the country color, the
 # classical models get fixed hues so they read across countries.
 MODEL_LINE = {
-    "lr": {"color": "#e67e22", "dash": "dash", "width": 2.1},
-    "lgbm": {"color": "#8e44ad", "dash": "dot", "width": 2.1},
+    "lr": {"color": "#d98e2b", "dash": "dash", "width": 2.0},
+    "lgbm": {"color": "#7d5ba6", "dash": "dot", "width": 2.0},
 }
 
-HOVER = "%{x|%a %H:%M} — %{y:.1f} EUR/MWh<extra></extra>"
+HOVER = "%{x|%a %d %b, %H:%M} — %{y:.1f} EUR/MWh<extra></extra>"
+
+# --- base design system (always on): Inter, hidden chrome, cards, stats ---
+BASE_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+html, body, .stApp, [data-testid="stSidebar"], button, input, select, label {
+  font-family: 'Inter', 'Source Sans Pro', system-ui, sans-serif !important;
+}
+/* hide streamlit chrome: toolbar, running-man, decoration gradient */
+[data-testid="stToolbar"], [data-testid="stDecoration"],
+[data-testid="stStatusWidget"], [data-testid="stLogoSpacer"] {
+  visibility: hidden !important; height: 0 !important;}
+[data-testid="stHeader"] {height: 0.6rem !important; background: transparent !important;}
+/* page title block */
+.app-head {display: flex; align-items: center; gap: 14px; margin: 6px 0 2px;}
+.app-mark {
+  width: 40px; height: 40px; border-radius: 10px; flex: 0 0 40px;
+  background: linear-gradient(135deg, #1f8a4c, #166b3a);
+  color: #fff; font-size: 20px; display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 2px 6px rgba(22, 107, 58, 0.25);}
+.app-title {font-size: 1.45rem; font-weight: 700; letter-spacing: -0.02em;
+  color: #17251d; line-height: 1.15;}
+.app-sub {font-size: 0.82rem; color: #5f6b64; font-weight: 500;
+  letter-spacing: 0.01em;}
+/* stat strip */
+.stat-strip {display: flex; gap: 12px; margin: 10px 0 6px; flex-wrap: wrap;}
+.stat {flex: 1; min-width: 130px; background: #f6faf7; border: 1px solid #e2ebe5;
+  border-radius: 10px; padding: 10px 14px;}
+.stat .k {font-size: 0.68rem; font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase; color: #6b7a70; margin-bottom: 2px;}
+.stat .v {font-size: 1.25rem; font-weight: 700; color: #17251d;
+  font-variant-numeric: tabular-nums;}
+.stat .u {font-size: 0.72rem; color: #8a978d; font-weight: 500;}
+.stat.hero {background: #eef7f1; border-color: #cfe5d8;}
+.stat.hero .v {color: #166b3a;}
+/* sidebar structure */
+[data-testid="stSidebar"] .eyebrow {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #8a978d; margin: 18px 0 2px;}
+[data-testid="stSidebar"] .eyebrow:first-child {margin-top: 4px;}
+[data-testid="stSidebarUserContent"] {padding-top: 0.5rem;}
+/* chart cards */
+.stPlotlyChart {background: #ffffff; border: 1px solid #e6ece8;
+  border-radius: 12px; padding: 10px 6px 2px 2px;}
+/* tables sit in cards too */
+[data-testid="stExpander"] {border: 1px solid #e6ece8 !important;
+  border-radius: 10px !important; overflow: hidden;}
+/* footer */
+.app-foot {border-top: 1px solid #e6ece8; margin-top: 26px; padding-top: 10px;
+  color: #8a978d; font-size: 0.75rem; display: flex; justify-content: space-between;}
+.app-foot b {color: #5f6b64; font-weight: 600;}
+"""
 
 DARK_CSS = """
 <style>
 /* base surfaces */
 .stApp, [data-testid="stSidebar"], [data-testid="stHeader"] {
-  background: #0e1512 !important; color: #e6edf3 !important;}
-[data-testid="stSidebar"] {border-color: #27352d !important;}
+  background: #0b120f !important; color: #e6edf3 !important;}
+[data-testid="stSidebar"] {background: #101915 !important;
+  border-color: #22302a !important;}
+[data-testid="stSidebar"] * {color: #c7d4cb !important;}
+[data-testid="stSidebar"] .eyebrow {color: #6f8177 !important;}
 .stApp p, .stApp span, .stApp label, .stApp h1, .stApp h2, .stApp h3,
 .stApp summary, .stApp td, .stApp th {color: #e6edf3 !important;}
 [data-testid="stCaptionContainer"] {color: #9fb3a8 !important;}
+/* title block inverts */
+.app-title {color: #eef4f0 !important;}
+.app-sub {color: #9fb3a8 !important;}
+.app-mark {box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);}
+/* stat strip dark */
+.stat {background: #121c17 !important; border-color: #22302a !important;}
+.stat .k {color: #6f8177 !important;}
+.stat .v {color: #eef4f0 !important;}
+.stat .u {color: #8fa398 !important;}
+.stat.hero {background: #14231b !important; border-color: #2c4436 !important;}
+.stat.hero .v {color: #4ecb82 !important;}
 /* input + dropdown controls */
 [data-testid="stMultiSelect"] .react-aria-ComboBox > div,
 [data-testid="stSelectbox"] .react-aria-ComboBox > div,
@@ -58,6 +124,8 @@ DARK_CSS = """
 [data-testid="stSelectbox"] input {color: #e6edf3 !important;}
 [data-testid="stSelectbox"] input {background-color: transparent !important;}
 .stApp input::placeholder {color: #9fb3a8 !important;}
+[data-testid="stTextInputRootElement"] {
+  background-color: #16211c !important; border-color: #2c3a32 !important;}
 [data-testid="stMultiSelectTagsContainer"] > div {
   background-color: #1d2a23 !important; color: #cfe5d8 !important;
   border-color: #2c3a32 !important;}
@@ -70,19 +138,19 @@ DARK_CSS = """
   background-color: #16211c !important; color: #9fb3a8 !important;
   border-color: #2c3a32 !important;}
 .stButtonGroup button[data-selected="true"],
-.stButtonGroup button[aria-pressed="true"] {color: #2e9e5b !important;}
+.stButtonGroup button[aria-pressed="true"] {color: #4ecb82 !important;}
 /* tabs */
 [data-testid="stTabs"] [role="tab"] {color: #9fb3a8 !important;}
-[data-testid="stTabs"] [role="tab"][aria-selected="true"] {color: #e6edf3 !important;}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {color: #eef4f0 !important;}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+  background-color: #4ecb82 !important;}
 /* expanders + alerts */
 [data-testid="stExpander"], [data-testid="stExpanderDetails"] {
-  background-color: #131c17 !important; border-color: #27352d !important;}
+  background-color: #121c17 !important; border-color: #22302a !important;}
 [data-testid="stExpander"] summary {
-  background-color: #1a2620 !important; color: #e6edf3 !important;}
+  background-color: #16211c !important; color: #e6edf3 !important;}
 [data-testid="stAlert"] {background-color: #16211c !important; color: #e6edf3 !important;}
-/* text input wrapper (the white box) + header buttons */
-[data-testid="stTextInputRootElement"] {
-  background-color: #16211c !important; border-color: #2c3a32 !important;}
+/* header buttons */
 [data-testid="stDeploymentButton"], [data-testid="stMainMenu"] {
   background-color: #16211c !important; color: #9fb3a8 !important;
   border: 1px solid #2c3a32 !important;}
@@ -90,17 +158,20 @@ DARK_CSS = """
    grid, whose theme comes from JS and cannot be reached by CSS at all) */
 .stApp table {border-collapse: collapse !important;}
 .stApp table th, .stApp table td {
-  background-color: #131c17 !important; color: #e6edf3 !important;
-  border-color: #27352d !important;}
+  background-color: #121c17 !important; color: #e6edf3 !important;
+  border-color: #22302a !important;}
 .stApp table thead th, .stApp table th[scope="row"] {
-  background-color: #1a2620 !important; color: #9fb3a8 !important;}
+  background-color: #16211c !important; color: #9fb3a8 !important;}
 .stApp table td {text-align: right !important;}
+/* chart card dark */
+.stPlotlyChart {background: #101915 !important; border-color: #22302a !important;}
 /* polish */
-.stPlotlyChart {border-radius: 8px;}
 ::-webkit-scrollbar {width: 10px; height: 10px;}
-::-webkit-scrollbar-track {background: #0e1512;}
-::-webkit-scrollbar-thumb {background: #27352d; border-radius: 5px;}
-</style>
+::-webkit-scrollbar-track {background: #0b120f;}
+::-webkit-scrollbar-thumb {background: #22302a; border-radius: 5px;}
+/* footer dark */
+.app-foot {border-color: #22302a !important; color: #6f8177 !important;}
+.app-foot b {color: #9fb3a8 !important;}
 """
 
 
@@ -203,43 +274,82 @@ st.set_page_config(
 )
 
 with st.sidebar:
-    dark = st.toggle("🌙 Dark mode", value=False)
+    dark = st.toggle("Dark mode", value=False)
+    st.markdown('<div class="eyebrow">Market</div>', unsafe_allow_html=True)
     country_label = st.selectbox(
         "Country",
         [f"{c} — {COUNTRIES[c]['name']}" for c in DEFAULT_COUNTRIES],
         index=0,
+        label_visibility="collapsed",
     )
     country = country_label.split(" — ")[0].strip()
+    st.markdown('<div class="eyebrow">Models</div>', unsafe_allow_html=True)
     models = st.multiselect(
-        "Models (click the legend to toggle lines)",
-        list(MODEL_LABELS), default=["tft"], format_func=MODEL_LABELS.get,
+        "Overlay models (click the legend to toggle lines)",
+        list(MODEL_LABELS), default=["tft", "lr", "lgbm"],
+        format_func=MODEL_LABELS.get, label_visibility="collapsed",
     )
     if not models:
         st.info("Pick at least one model.")
         st.stop()
-    show_ci = "tft" in models and st.checkbox("Show q10–q90 band (TFT)", value=True)
-    past_date = st.text_input("Past date to compare (YYYY-MM-DD)", placeholder="2026-06-01")
+    st.markdown('<div class="eyebrow">Display</div>', unsafe_allow_html=True)
+    show_ci = "tft" in models and st.checkbox("Quantile band (TFT q10–q90)", value=True)
+    past_date = st.text_input(
+        "Replay a past day", placeholder="YYYY-MM-DD",
+        label_visibility="collapsed",
+    )
     if past_date and not past_date.strip():
         past_date = ""
 
 if dark:
     st.markdown(DARK_CSS, unsafe_allow_html=True)
-
-template = "plotly_dark" if dark else "plotly_white"
-plot_bg = "rgba(0,0,0,0)"
+st.markdown(BASE_CSS, unsafe_allow_html=True)
 
 
 def apply_layout(fig, height=440):
+    grid = "#27352d" if dark else "#e7ede9"
+    tick = "#8fa398" if dark else "#6b7a70"
     fig.update_layout(
-        template=template,
-        margin={"l": 10, "r": 10, "t": 10, "b": 10},
+        template="plotly_dark" if dark else "plotly_white",
+        font={"family": "Inter, 'Source Sans Pro', sans-serif", "size": 12,
+              "color": "#c7d4cb" if dark else "#33413a"},
+        margin={"l": 14, "r": 18, "t": 26, "b": 14},
         height=height,
-        plot_bgcolor=plot_bg,
-        paper_bgcolor=plot_bg,
-        yaxis_title="EUR / MWh",
-        legend={"orientation": "h", "y": 1.02},
-        xaxis={"dtick": 3600000 * 3, "tickformat": "%H:%M"},
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        yaxis={"title": {"text": "EUR / MWh", "font": {"size": 11}},
+               "gridcolor": grid, "gridwidth": 1, "zeroline": False,
+               "tickfont": {"color": tick, "size": 11}},
+        xaxis={"gridcolor": "rgba(0,0,0,0)", "dtick": 3600000 * 3,
+               "tickformat": "%H:%M", "tickfont": {"color": tick, "size": 11}},
+        legend={"orientation": "h", "y": 1.06, "bgcolor": "rgba(0,0,0,0)",
+                "font": {"size": 11.5, "color": "#c7d4cb" if dark else "#33413a"}},
+        hovermode="x unified",
+        hoverlabel={"bgcolor": "#16211c" if dark else "#ffffff",
+                    "bordercolor": "#2c3a32" if dark else "#d9e5dd",
+                    "font": {"family": "Inter, sans-serif", "size": 12,
+                             "color": "#e6edf3" if dark else "#17251d"}},
     )
+
+
+def stats_strip(d):
+    """Four-metric strip replacing the old floating bold text line."""
+    p = d["predicted_price_eur_mwh"]
+    ts = d["timestamp"]
+    peak_i = int(p.idxmax())
+    cells = [
+        ("Mean", f"{p.mean():.1f}", "EUR/MWh", False),
+        ("Peak", f"{p.max():.1f}", ts.loc[peak_i].strftime("%H:%M"), True),
+        ("Min", f"{p.min():.1f}", "EUR/MWh", False),
+        ("Spread", f"{p.max() - p.min():.1f}", "EUR/MWh", False),
+    ]
+    html = '<div class="stat-strip">' + "".join(
+        f'<div class="stat{" hero" if hero else ""}">'
+        f'<div class="k">{k}</div><div class="v">{v}</div>'
+        f'<div class="u">{u}</div></div>'
+        for k, v, u, hero in cells
+    ) + "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def add_band(fig, d, color, label=""):
@@ -270,7 +380,13 @@ def add_actual(fig, d):
             ))
 
 
-st.title("⚡ EU Electricity Price Forecaster")
+st.markdown(
+    '<div class="app-head"><div class="app-mark">⚡</div><div>'
+    '<div class="app-title">EU Electricity Price Forecaster</div>'
+    '<div class="app-sub">Day-ahead hourly prices · Portugal · Spain · Switzerland'
+    " · probabilistic TFT + classical baselines</div></div></div>",
+    unsafe_allow_html=True,
+)
 
 # ---------------- forecast tab ----------------
 with st.spinner("Loading forecast…"):
@@ -283,17 +399,13 @@ if not frames:
 models = [m for m in models if m in frames]
 
 st.caption(
-    f"Day-ahead electricity prices · {get_country(country)['name']} · "
+    f"{get_country(country)['name']} · "
     + " · ".join(MODEL_LABELS[m] for m in models)
+    + (f" · replaying {past_date.strip()}" if past_date.strip() else "")
 )
 
 first = frames[models[0]]
-prices = first["predicted_price_eur_mwh"]
-peak_hour = first.loc[prices.idxmax(), "timestamp"].strftime("%H:%M")
-st.markdown(
-    f"**Peak {prices.max():.1f} EUR/MWh** at {peak_hour} ({MODEL_LABELS[models[0]]}) · "
-    f"min {prices.min():.1f} · mean {prices.mean():.1f}"
-)
+stats_strip(first)
 
 color = COUNTRY_COLORS.get(country, "#7f7f7f")
 fig = go.Figure()
@@ -486,3 +598,10 @@ with tab_bench:
         st.table(fmt_table(b).set_index("Model"))
     else:
         st.info("No benchmark tables found — run the pipeline first.")
+
+st.markdown(
+    '<div class="app-foot"><span><b>Data</b> Energy-Charts (EPEX SPOT / ENTSO-E) '
+    "· Open-Meteo</span><span><b>Models</b> per-country TFT, Linear Regression, "
+    "LightGBM — walk-forward day-ahead protocol</span></div>",
+    unsafe_allow_html=True,
+)
