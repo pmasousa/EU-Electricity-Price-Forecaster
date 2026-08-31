@@ -8,7 +8,7 @@ Probabilistic day-ahead electricity price forecasting for Portugal, Spain and Sw
 
 ## What's inside
 
-- **Honest walk-forward benchmark** — one shared harness scores every model on identical splits and covariates (load lagged 24h/168h — no realized-load leakage at gate closure), across all 24 forecast hours on ~3 years of hourly data per market
+- **Walk-forward benchmark** — one shared harness scores every model on identical splits and covariates (load lagged 24h/168h — no realized-load leakage at gate closure), across all 24 forecast hours on ~3 years of hourly data per market
 - **Models** — Temporal Fusion Transformer with quantile bands (pinball loss + coverage), Linear Regression, LightGBM, and naive persistence baselines for context
 - **Multi-model serving** — FastAPI with a `model` parameter (`tft | lr | lgbm`), self-contained per-country serving bundles, retroactive date queries
 - **Interactive dashboard** — Streamlit + Plotly: model overlays, three-country comparison, an out-of-sample day replay (`t-4 … Today | Tomorrow`) with per-model error tables, dark mode
