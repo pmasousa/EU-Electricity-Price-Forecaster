@@ -294,12 +294,6 @@ with st.sidebar:
         st.stop()
     st.markdown('<div class="eyebrow">Display</div>', unsafe_allow_html=True)
     show_ci = "tft" in models and st.checkbox("Quantile band (TFT q10–q90)", value=True)
-    past_date = st.text_input(
-        "Replay a past day", placeholder="YYYY-MM-DD",
-        label_visibility="collapsed",
-    )
-    if past_date and not past_date.strip():
-        past_date = ""
 
 if dark:
     st.markdown(DARK_CSS, unsafe_allow_html=True)
@@ -389,9 +383,31 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------------- forecast tab ----------------
+# ---------------- day timeline: t-4 … today | tomorrow ----------------
+try:
+    days = _get("/days", {"country": country, "n": 5}).get("days", [])
+except Exception:
+    days = []  # /days unavailable — fall back to tomorrow only
+
+options = days + ["tomorrow"]
+
+
+def _day_label(o):
+    if o == "tomorrow":
+        return "Tomorrow"
+    i = days.index(o)
+    prefix = "Today" if i == len(days) - 1 else f"t-{len(days) - 1 - i}"
+    return f"{prefix} · {pd.Timestamp(o).strftime('%a %d %b')}"
+
+
+sel = st.segmented_control(
+    "View", options, default="tomorrow", format_func=_day_label,
+    label_visibility="collapsed",
+) or "tomorrow"
+replay = "" if sel == "tomorrow" else sel
+
 with st.spinner("Loading forecast…"):
-    frames, failed = fetch_frames(country, models, past_date.strip())
+    frames, failed = fetch_frames(country, models, replay)
 warn_failures(failed)
 frames = align_frames(frames)
 if not frames:
@@ -399,11 +415,13 @@ if not frames:
     st.stop()
 models = [m for m in models if m in frames]
 
-st.caption(
-    f"{get_country(country)['name']} · "
-    + " · ".join(MODEL_LABELS[m] for m in models)
-    + (f" · replaying {past_date.strip()}" if past_date.strip() else "")
+mode = (
+    f"{get_country(country)['name']} · next-24h day-ahead forecast"
+    if sel == "tomorrow"
+    else f"{get_country(country)['name']} · replaying {sel} — out-of-sample: "
+         "every served model was trained before this date"
 )
+st.caption(mode + " · " + " · ".join(MODEL_LABELS[m] for m in models))
 
 first = frames[models[0]]
 stats_strip(first)
@@ -424,6 +442,30 @@ add_actual(fig, first)
 apply_layout(fig)
 st.plotly_chart(fig, width="stretch")
 
+if replay:
+    rows = []
+    for m in models:
+        d = frames[m]
+        if "actual_price_eur_mwh" not in d.columns:
+            continue
+        a = d.dropna(subset=["actual_price_eur_mwh"])
+        if a.empty:
+            continue
+        err = a["predicted_price_eur_mwh"] - a["actual_price_eur_mwh"]
+        rows.append({
+            "Model": MODEL_LABELS[m],
+            "MAE (EUR/MWh)": err.abs().mean(),
+            "RMSE (EUR/MWh)": (err ** 2).mean() ** 0.5,
+            "Bias (EUR/MWh)": err.mean(),
+        })
+    if rows:
+        metrics = pd.DataFrame(rows).sort_values("MAE (EUR/MWh)").round(2)
+        metrics.loc[metrics["MAE (EUR/MWh)"].idxmin(), "Model"] += "  🏆"
+        st.caption(f"Day-ahead error on {replay} — lower is better:")
+        st.table(fmt_table(metrics.set_index("Model")))
+    else:
+        st.info("No actuals recorded for this day yet.")
+
 base_idx = first["timestamp"]
 display = pd.DataFrame({"Time": base_idx.dt.strftime("%Y-%m-%d %H:%M")})
 for m in models:
@@ -439,10 +481,8 @@ if "actual_price_eur_mwh" in first.columns:
 with st.expander("Hourly forecast table", expanded=False):
     st.table(fmt_table(display).set_index("Time"))
 
-# ---------------- compare + backtest + benchmark tabs ----------------
-tab_compare, tab_backtest, tab_bench = st.tabs(
-    ["Compare countries", "Backtest days", "Benchmark"]
-)
+# ---------------- compare + benchmark tabs ----------------
+tab_compare, tab_bench = st.tabs(["Compare countries", "Benchmark"])
 
 with tab_compare:
     cmp_codes = st.multiselect(
@@ -496,85 +536,6 @@ with tab_compare:
                 if table is not None:
                     with st.expander("Hourly comparison table", expanded=False):
                         st.table(fmt_table(table).set_index("Time"))
-
-with tab_backtest:
-    st.caption(
-        "Forecast vs. actual on the 5 most recent complete days. Every served "
-        "model was trained before these dates — this is an honest "
-        "out-of-sample error read, not a training fit."
-    )
-    try:
-        days = _get("/days", {"country": country, "n": 5}).get("days", [])
-    except Exception as e:
-        days = []
-        st.warning(f"Could not load backtest days ({e}).")
-    if days:
-        day = st.segmented_control(
-            "Day", days, default=days[-1],
-            format_func=lambda d: pd.Timestamp(d).strftime("%a %d %b"),
-        ) or days[-1]
-        bt_sel = st.multiselect(
-            "Models", list(MODEL_LABELS), default=list(MODEL_LABELS),
-            format_func=MODEL_LABELS.get, key="bt_models",
-        )
-        if not bt_sel:
-            st.info("Pick at least one model.")
-        else:
-            bt_show_ci = "tft" in bt_sel and st.checkbox(
-                "Show q10–q90 band (TFT)", value=True, key="bt_show_ci"
-            )
-            with st.spinner(f"Scoring {day}…"):
-                bt_frames, bt_failed = fetch_frames(country, bt_sel, day)
-            warn_failures(bt_failed)
-            bt_frames = align_frames(bt_frames)
-            if bt_frames:
-                bt_models = [m for m in bt_sel if m in bt_frames]
-                bt_first = bt_frames[bt_models[0]]
-                fig3 = go.Figure()
-                if bt_show_ci and "tft" in bt_frames:
-                    add_band(fig3, bt_frames["tft"], color)
-                for m in bt_models:
-                    style = ({"color": color, "width": 2.6, "dash": "solid"}
-                             if m == "tft" else MODEL_LINE[m])
-                    fig3.add_trace(go.Scatter(
-                        x=bt_frames[m]["timestamp"],
-                        y=bt_frames[m]["predicted_price_eur_mwh"],
-                        mode="lines" if m != "tft" else "lines+markers",
-                        line=style, marker={"size": 5} if m == "tft" else None,
-                        name=MODEL_LABELS[m], hovertemplate=HOVER,
-                    ))
-                add_actual(fig3, bt_first)
-                apply_layout(fig3)
-                st.plotly_chart(fig3, width="stretch")
-
-                rows = []
-                for m in bt_models:
-                    d = bt_frames[m]
-                    if "actual_price_eur_mwh" not in d.columns:
-                        continue
-                    a = d.dropna(subset=["actual_price_eur_mwh"])
-                    if a.empty:
-                        continue
-                    err = a["predicted_price_eur_mwh"] - a["actual_price_eur_mwh"]
-                    rows.append({
-                        "Model": MODEL_LABELS[m],
-                        "MAE (EUR/MWh)": err.abs().mean(),
-                        "RMSE (EUR/MWh)": (err ** 2).mean() ** 0.5,
-                        "Bias (EUR/MWh)": err.mean(),
-                        "Hours scored": len(a),
-                    })
-                if rows:
-                    metrics = (
-                        pd.DataFrame(rows).sort_values("MAE (EUR/MWh)")
-                        .round(2).reset_index(drop=True)
-                    )
-                    metrics.loc[0, "Model"] += "  🏆"
-                    st.caption(f"Day-ahead error on {day} — lower is better:")
-                    st.table(fmt_table(metrics).set_index("Model"))
-                else:
-                    st.info("No actuals recorded for this day yet.")
-    else:
-        st.info("No complete actual-price days available yet — run the pipeline.")
 
 with tab_bench:
     try:
